@@ -1,66 +1,81 @@
+x-prompt-template: &prompt-template |
+  I want to categorize the given bank transaction.
+
+  Transaction details:
+  * Amount: {{amount}}
+  * Type: {{type}}
+  {{#if description}}
+  * Description: {{description}}
+  {{/if}}
+  {{#if payee}}
+  * Payee: {{payee}}
+  {{^}}
+  * Payee: {{importedPayee}}
+  {{/if}}
+  {{#if date}}
+  * Date: {{date}}
+  {{/if}}
+
+  Existing categories by group:
+  {{#each categoryGroups}}
+  GROUP: {{name}} (ID: "{{id}}")
+  {{#each categories}}
+  * {{name}} (ID: "{{id}}")
+  {{/each}}
+  {{/each}}
+
+  {{#if rules.length}}
+  Existing Rules:
+  {{#each rules}}
+  {{incIndex @index}}. {{ruleName}} → {{categoryName}}
+     Conditions: {{#each conditions}}{{field}} {{op}} {{value}}{{#unless @last}}, {{/unless}}{{/each}}
+  {{/each}}
+  {{/if}}
+
+  CATEGORIZATION RULES (IMPORTANT, in order):
+
+  1. Prefer abstention over a wrong guess. If no existing category clearly fits, DO NOT pick a generic fallback such as "UNBEKANNT", "Unknown", "Sonstiges", "Miscellaneous", or "Other". Respond with {"type": "skip"} so the transaction is marked for manual review.
+
+  2. Transactions whose payee is a personal name with an IBAN in parentheses (pattern: "Firstname Lastname (DE.. XXX ....)") are almost always transfers between own accounts or private reimbursements. Respond with {"type": "skip"} — these must be reconciled as transfers in Actual Budget, not categorized.
+
+  3. Only assign an existing category when the payee or description clearly maps to it (supermarket → Groceries, streaming service → Entertainment, airline → Travel). A weak or speculative association is NOT enough — skip instead.
+
+  4. Do not suggest new categories unless the transaction clearly belongs to a domain that no existing category covers.
+
+  RESPONSE FORMAT: respond with ONLY a valid JSON object in one of these shapes:
+
+  {"type": "existing", "categoryId": "<uuid>"}
+  {"type": "rule", "categoryId": "<uuid>", "ruleName": "string"}
+  {"type": "new", "newCategory": {"name": "string", "groupName": "string", "groupIsNew": boolean}}
+  {"type": "skip"}
+
+  DO NOT output any text before or after the JSON. Your entire response must be a valid, parsable JSON object.
+
+  {{#if hasWebSearchTool}}
+  You can use the web search tool to find more information about the transaction when the merchant is unfamiliar.
+  {{/if}}
+
+x-actual-ai-base: &actual-ai-base
+  build: .
+  restart: "no"
+  env_file: .env
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+# Two explicit services so the mode is part of the command, not a hidden flag in .env.
+# The default service name is intentionally NOT "actual-ai" — you must type the mode.
 services:
-  actual-ai:
-    build: .
-    container_name: actual-ai
-    restart: "no"
-    env_file: .env
+  actual-ai-dry:
+    <<: *actual-ai-base
+    container_name: actual-ai-dry
     environment:
-      PROMPT_TEMPLATE: |
-        I want to categorize the given bank transaction.
+      FEATURES: '["classifyOnStartup","freeWebSearch","dryRun"]'
+      PROMPT_TEMPLATE: *prompt-template
 
-        Transaction details:
-        * Amount: {{amount}}
-        * Type: {{type}}
-        {{#if description}}
-        * Description: {{description}}
-        {{/if}}
-        {{#if payee}}
-        * Payee: {{payee}}
-        {{^}}
-        * Payee: {{importedPayee}}
-        {{/if}}
-        {{#if date}}
-        * Date: {{date}}
-        {{/if}}
-
-        Existing categories by group:
-        {{#each categoryGroups}}
-        GROUP: {{name}} (ID: "{{id}}")
-        {{#each categories}}
-        * {{name}} (ID: "{{id}}")
-        {{/each}}
-        {{/each}}
-
-        {{#if rules.length}}
-        Existing Rules:
-        {{#each rules}}
-        {{incIndex @index}}. {{ruleName}} → {{categoryName}}
-           Conditions: {{#each conditions}}{{field}} {{op}} {{value}}{{#unless @last}}, {{/unless}}{{/each}}
-        {{/each}}
-        {{/if}}
-
-        CATEGORIZATION RULES (IMPORTANT, in order):
-
-        1. Prefer abstention over a wrong guess. If no existing category clearly fits, DO NOT pick a generic fallback such as "UNBEKANNT", "Unknown", "Sonstiges", "Miscellaneous", or "Other". Respond with {"type": "skip"} so the transaction is marked for manual review.
-
-        2. Transactions whose payee is a personal name with an IBAN in parentheses (pattern: "Firstname Lastname (DE.. XXX ....)") are almost always transfers between own accounts or private reimbursements. Respond with {"type": "skip"} — these must be reconciled as transfers in Actual Budget, not categorized.
-
-        3. Only assign an existing category when the payee or description clearly maps to it (supermarket → Groceries, streaming service → Entertainment, airline → Travel). A weak or speculative association is NOT enough — skip instead.
-
-        4. Do not suggest new categories unless the transaction clearly belongs to a domain that no existing category covers.
-
-        RESPONSE FORMAT: respond with ONLY a valid JSON object in one of these shapes:
-
-        {"type": "existing", "categoryId": "<uuid>"}
-        {"type": "rule", "categoryId": "<uuid>", "ruleName": "string"}
-        {"type": "new", "newCategory": {"name": "string", "groupName": "string", "groupIsNew": boolean}}
-        {"type": "skip"}
-
-        DO NOT output any text before or after the JSON. Your entire response must be a valid, parsable JSON object.
-
-        {{#if hasWebSearchTool}}
-        You can use the web search tool to find more information about the transaction when the merchant is unfamiliar.
-        {{/if}}
-    logging:
-      driver: json-file
-      options: { max-size: "10m", max-file: "3" }
+  actual-ai-live:
+    <<: *actual-ai-base
+    container_name: actual-ai-live
+    environment:
+      FEATURES: '["classifyOnStartup","freeWebSearch"]'
+      PROMPT_TEMPLATE: *prompt-template
