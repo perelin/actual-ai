@@ -9,6 +9,7 @@
     "dev": "nodemon --exec \"npm run lint && ts-node ./app.ts\"",
     "lint": "eslint --fix **/*.ts",
     "prod": "node dist/app.js",
+    "recon:payees": "ts-node ./recon-payees.ts",
     "test": "jest"
   },
   "keywords": [],

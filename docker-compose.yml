@@ -79,3 +79,12 @@ services:
     environment:
       FEATURES: '["classifyOnStartup","freeWebSearch"]'
       PROMPT_TEMPLATE: *prompt-template
+
+  # Read-only diagnostic: dumps imported_payee analytics from the live Actual
+  # budget. Does NOT call any LLM and does NOT write to Actual. Intended for
+  # tuning the per-payee fuzzy-matching threshold and inspecting bank-string
+  # normalization candidates.
+  actual-ai-recon:
+    <<: *actual-ai-base
+    container_name: actual-ai-recon
+    command: ["npm", "run", "recon:payees"]
