@@ -62,6 +62,9 @@ function parseLlmResponse(text: string): UnifiedResponse {
         newCategory: parsed.newCategory,
       };
     }
+    if (parsed.type === 'skip') {
+      return { type: 'skip' };
+    }
 
     // If the response doesn't match expected format but has a categoryId,
     // default to treating it as an existing category

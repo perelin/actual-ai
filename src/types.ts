@@ -93,7 +93,7 @@ export interface CategorySuggestion {
 }
 
 export interface UnifiedResponse {
-  type: 'existing' | 'new' | 'rule';
+  type: 'existing' | 'new' | 'rule' | 'skip';
   categoryId?: string;
   ruleName?: string;
   newCategory?: CategorySuggestion;

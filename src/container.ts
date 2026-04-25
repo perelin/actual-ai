@@ -49,6 +49,7 @@ import TagService from './transaction/tag-service';
 import RuleMatchStrategy from './transaction/processing-strategy/rule-match-strategy';
 import ExistingCategoryStrategy from './transaction/processing-strategy/existing-category-strategy';
 import NewCategoryStrategy from './transaction/processing-strategy/new-category-strategy';
+import SkipStrategy from './transaction/processing-strategy/skip-strategy';
 import CategorySuggester from './transaction/category-suggester';
 import BatchTransactionProcessor from './transaction/batch-transaction-processor';
 import TransactionProcessor from './transaction/transaction-processor';
@@ -129,13 +130,14 @@ const categorySuggester = new CategorySuggester(
 );
 
 const newCategoryStrategy = new NewCategoryStrategy();
+const skipStrategy = new SkipStrategy(actualApiService, tagService);
 
 const transactionProcessor = new TransactionProcessor(
   actualApiService,
   llmService,
   promptGenerator,
   tagService,
-  [ruleMatchStrategy, existingCategoryStrategy, newCategoryStrategy],
+  [ruleMatchStrategy, existingCategoryStrategy, newCategoryStrategy, skipStrategy],
 );
 
 const batchTransactionProcessor = new BatchTransactionProcessor(
