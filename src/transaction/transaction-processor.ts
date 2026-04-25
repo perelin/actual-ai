@@ -9,6 +9,7 @@ import {
   PromptGeneratorI,
 } from '../types';
 import TagService from './tag-service';
+import PayeeHistoryService from './payee-history-service';
 
 class TransactionProcessor {
   private readonly actualApiService: ActualApiServiceI;
@@ -48,13 +49,39 @@ class TransactionProcessor {
         groupId?: string;
         transactions: TransactionEntity[];
       }>,
+    payeeHistoryService: PayeeHistoryService | null = null,
   ): Promise<void> {
     try {
+      let payeeHistoryView = null;
+      if (payeeHistoryService) {
+        const match = payeeHistoryService.getMatch(transaction);
+        const totalPrior = [...match.histogram.values()].reduce((a, b) => a + b, 0);
+        console.log(
+          `[few-shot] tx=${transaction.id} payee="${transaction.imported_payee ?? ''}" `
+          + `key="${match.normalizedKey}" match=${match.matchType} prior=${totalPrior}`,
+        );
+        if (match.matchType === 'exact' || match.matchType === 'fuzzy') {
+          payeeHistoryView = {
+            normalizedKey: match.normalizedKey,
+            matchType: match.matchType,
+            histogramLine: '',
+            entries: match.entries.map((e) => ({
+              date: e.date ?? '',
+              amount: Math.abs(e.amount),
+              importedPayee: e.imported_payee ?? '',
+              categoryName: payeeHistoryService.getCategoryName(e.category),
+            })),
+            histogram: match.histogram,
+          };
+        }
+      }
+
       const prompt = this.promptGenerator.generate(
         categoryGroups,
         transaction,
         payees,
         rules,
+        payeeHistoryView,
       );
 
       const response = await this.llmService.ask(prompt);

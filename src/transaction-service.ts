@@ -5,10 +5,14 @@ import type {
   ActualApiServiceI,
   TransactionServiceI,
 } from './types';
-import { isFeatureEnabled } from './config';
+import {
+  isFeatureEnabled, fewShotAggregatorBlocklist, guessedTag, notGuessedTag,
+} from './config';
 import CategorySuggester from './transaction/category-suggester';
 import BatchTransactionProcessor from './transaction/batch-transaction-processor';
 import TransactionFilterer from './transaction/transaction-filterer';
+import PayeeHistoryService from './transaction/payee-history-service';
+import SimilarityCalculator from './similarity-calculator';
 
 class TransactionService implements TransactionServiceI {
   private readonly actualApiService: ActualApiServiceI;
@@ -53,6 +57,8 @@ class TransactionService implements TransactionServiceI {
     console.log(`Found ${rules.length} transaction categorization rules`);
     console.log('rerunMissedTransactions', isFeatureEnabled('rerunMissedTransactions'));
 
+    const usePayeeHistory = isFeatureEnabled('fewShotPayeeHistory');
+
     const uncategorizedTransactions = this.transactionFilterer.filterUncategorized(
       transactions,
       accounts,
@@ -61,6 +67,19 @@ class TransactionService implements TransactionServiceI {
     if (uncategorizedTransactions.length === 0) {
       console.log('No uncategorized transactions to process');
       return;
+    }
+
+    let payeeHistoryService: PayeeHistoryService | null = null;
+    if (usePayeeHistory) {
+      const flatCategories = categories.map((c) => ({ id: c.id, name: c.name }));
+      payeeHistoryService = new PayeeHistoryService(
+        transactions,
+        flatCategories,
+        fewShotAggregatorBlocklist,
+        new SimilarityCalculator(),
+        { guessedTag, notGuessedTag },
+      );
+      console.log('Payee history index built');
     }
 
     // Track suggested new categories
@@ -79,6 +98,7 @@ class TransactionService implements TransactionServiceI {
       rules,
       categories,
       suggestedCategories,
+      payeeHistoryService,
     );
 
     // Create new categories if not in dry run mode

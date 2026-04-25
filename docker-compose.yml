@@ -31,6 +31,17 @@ x-prompt-template: &prompt-template |
      Conditions: {{#each conditions}}{{field}} {{op}} {{value}}{{#unless @last}}, {{/unless}}{{/each}}
   {{/each}}
   {{/if}}
+  {{#if payeeHistory}}
+  Past classifications for this payee (normalized: "{{payeeHistory.normalizedKey}}", match: {{payeeHistory.matchType}}):
+  {{payeeHistory.histogramLine}}
+
+  Most recent examples:
+  {{#each payeeHistory.entries}}
+  * {{date}} | amount {{amount}} | "{{importedPayee}}" → {{categoryName}}
+  {{/each}}
+
+  Use this history as a strong prior. Only deviate when the current transaction's amount, description, or notes clearly indicate a different category.
+  {{/if}}
 
   CATEGORIZATION RULES (IMPORTANT, in order):
 
@@ -70,14 +81,16 @@ services:
     <<: *actual-ai-base
     container_name: actual-ai-dry
     environment:
-      FEATURES: '["classifyOnStartup","freeWebSearch","dryRun"]'
+      #FEATURES: '["classifyOnStartup","freeWebSearch","dryRun"]'
+      FEATURES: '["classifyOnStartup", "dryRun", "fewShotPayeeHistory"]'
       PROMPT_TEMPLATE: *prompt-template
 
   actual-ai-live:
     <<: *actual-ai-base
     container_name: actual-ai-live
     environment:
-      FEATURES: '["classifyOnStartup","freeWebSearch"]'
+      #FEATURES: '["classifyOnStartup","freeWebSearch"]'
+      FEATURES: '["classifyOnStartup"]'
       PROMPT_TEMPLATE: *prompt-template
 
   # Read-only diagnostic: dumps imported_payee analytics from the live Actual

@@ -115,7 +115,23 @@ export interface PromptGeneratorI {
     transaction: TransactionEntity,
     payees: APIPayeeEntity[],
     rules: RuleEntity[],
+    payeeHistory?: PayeeHistoryView | null,
   ): string;
+}
+
+export interface PayeeHistoryEntry {
+  date: string;
+  amount: number;
+  importedPayee: string;
+  categoryName: string;
+}
+
+export interface PayeeHistoryView {
+  normalizedKey: string;
+  matchType: 'exact' | 'fuzzy';
+  histogramLine: string;
+  entries: PayeeHistoryEntry[];
+  histogram: Map<string, number>;
 }
 
 export interface SearchResult {

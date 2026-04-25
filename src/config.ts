@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import fs from 'fs';
+import normalizePayee from './utils/payee-normalizer';
 
 const defaultPromptTemplate = fs.readFileSync('./src/templates/prompt.hbs', 'utf8').trim();
 
@@ -113,6 +114,12 @@ function registerStandardFeatures() {
     defaultValue: false,
     description: 'Disable Rate Limiter',
   };
+
+  features.fewShotPayeeHistory = {
+    enabled: enabledFeatures.includes('fewShotPayeeHistory'),
+    defaultValue: false,
+    description: 'Include per-payee few-shot history from user-categorized transactions in LLM prompt',
+  };
 }
 
 function registerToolFeatures() {
@@ -144,6 +151,30 @@ function registerToolFeatures() {
 
 registerStandardFeatures();
 registerToolFeatures();
+
+export const fewShotFuzzyThreshold = 0.7;
+export const fewShotExactMatchTarget = 3;
+export const fewShotMaxExamples = 5;
+export const fewShotHistogramTopN = 5;
+
+export const fewShotAggregatorBlocklistRaw = [
+  'Paypal Europe S.A.R.L. Et Cie S.C.A',
+  'Klarna Bank Ab',
+  'Klarna Bank Ab (Publ) (DE61 XXX 5519)',
+  'Amazon Payments Europe S.C.A.',
+  'Amazon Payments Europe S.C.A. (DE87 XXX 2006)',
+  'Amazon Eu S.A R.L., Niederlassung Deutschland',
+  'Apple.Com/Bill',
+  'Nexi Germany Gmbh (DE09 XXX 5340)',
+];
+
+export const fewShotAggregatorBlocklist = new Set(
+  fewShotAggregatorBlocklistRaw.map(normalizePayee),
+);
+
+export function isAggregatorPrefix(normalized: string): boolean {
+  return normalized.startsWith('sumup');
+}
 
 export function isFeatureEnabled(featureName: string): boolean {
   return features[featureName]?.enabled ?? features[featureName]?.defaultValue ?? false;

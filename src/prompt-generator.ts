@@ -3,9 +3,10 @@ import { RuleEntity, TransactionEntity } from '@actual-app/core/src/types/models
 import handlebars from './handlebars-helpers';
 import {
   PromptGeneratorI,
+  PayeeHistoryView,
 } from './types';
 import PromptTemplateException from './exceptions/prompt-template-exception';
-import { isToolEnabled } from './config';
+import { isToolEnabled, fewShotHistogramTopN } from './config';
 import { transformRulesToDescriptions } from './utils/rule-utils';
 
 class PromptGenerator implements PromptGeneratorI {
@@ -22,6 +23,7 @@ class PromptGenerator implements PromptGeneratorI {
     transaction: TransactionEntity,
     payees: APIPayeeEntity[],
     rules: RuleEntity[],
+    payeeHistory?: PayeeHistoryView | null,
   ): string {
     let template;
     try {
@@ -48,6 +50,27 @@ class PromptGenerator implements PromptGeneratorI {
     try {
       const webSearchEnabled = (typeof isToolEnabled('webSearch') === 'boolean' && isToolEnabled('webSearch'))
         || (typeof isToolEnabled('freeWebSearch') === 'boolean' && isToolEnabled('freeWebSearch'));
+
+      let formattedHistory: PayeeHistoryView | undefined;
+      if (payeeHistory && payeeHistory.entries.length > 0) {
+        const sorted = [...payeeHistory.histogram.entries()]
+          .sort((a, b) => b[1] - a[1]);
+        const topN = sorted.slice(0, fewShotHistogramTopN);
+        const tail = sorted.slice(fewShotHistogramTopN);
+        const topLine = topN.map(([name, count]) => `${count}× ${name}`).join(', ');
+        const total = sorted.reduce((sum, e) => sum + e[1], 0);
+        const tailTotal = tail.reduce((sum, e) => sum + e[1], 0);
+        const histogramLine = `${total} prior: ${topLine}${tailTotal > 0 ? `, +${tailTotal} in other categories` : ''}`;
+
+        formattedHistory = {
+          normalizedKey: payeeHistory.normalizedKey,
+          matchType: payeeHistory.matchType,
+          histogramLine,
+          entries: payeeHistory.entries,
+          histogram: payeeHistory.histogram,
+        };
+      }
+
       return template({
         categoryGroups: groupsWithCategories,
         rules: rulesDescription,
@@ -60,6 +83,7 @@ class PromptGenerator implements PromptGeneratorI {
         cleared: transaction.cleared,
         reconciled: transaction.reconciled,
         hasWebSearchTool: webSearchEnabled,
+        payeeHistory: formattedHistory,
       });
     } catch {
       console.error('Error generating prompt. Check syntax of your template.');

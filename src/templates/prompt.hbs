@@ -30,6 +30,17 @@ Existing Rules:
    Conditions: {{#each conditions}}{{field}} {{op}} {{value}}{{#unless @last}}, {{/unless}}{{/each}}
 {{/each}}
 {{/if}}
+{{#if payeeHistory}}
+Past classifications for this payee (normalized: "{{payeeHistory.normalizedKey}}", match: {{payeeHistory.matchType}}):
+{{payeeHistory.histogramLine}}
+
+Most recent examples:
+{{#each payeeHistory.entries}}
+* {{date}} | amount {{amount}} | "{{importedPayee}}" → {{categoryName}}
+{{/each}}
+
+Use this history as a strong prior. Only deviate when the current transaction's amount, description, or notes clearly indicate a different category.
+{{/if}}
 
 IMPORTANT: You MUST respond with ONLY a valid JSON object using this structure:
 {

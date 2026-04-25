@@ -238,4 +238,144 @@ ANSWER BY A CATEGORY ID - DO NOT CREATE ENTIRE SENTENCE - DO NOT WRITE CATEGORY 
       expect(prompt).not.toContain('You can use the web search tool to find more information about the transaction.');
     });
   });
+
+  describe('payee history (few-shot)', () => {
+    const baseTx = () => GivenActualData.createTransaction(
+      '1',
+      -1500,
+      'Rewe Markt Gmbh (DE80 XXX 0759)',
+      '',
+      undefined,
+      undefined,
+      '2026-04-20',
+    );
+    const baseCategoryGroups = () => GivenActualData.createSampleCategoryGroups();
+    const basePayees = () => GivenActualData.createSamplePayees();
+
+    it('renders the few-shot block when payeeHistory has entries', () => {
+      const promptGenerator = new PromptGenerator(promptTemplate);
+      const prompt = promptGenerator.generate(
+        baseCategoryGroups(),
+        baseTx(),
+        basePayees(),
+        [],
+        {
+          normalizedKey: 'rewe markt gmbh',
+          matchType: 'exact',
+          histogramLine: '',
+          entries: [
+            {
+              date: '2026-04-15', amount: 1234, importedPayee: 'Rewe Markt Gmbh (DE80 XXX 0759)', categoryName: 'Groceries',
+            },
+            {
+              date: '2026-04-10', amount: 999, importedPayee: 'Rewe Markt Gmbh (DE80 XXX 0759)', categoryName: 'Groceries',
+            },
+          ],
+          histogram: new Map([['Groceries', 12]]),
+        },
+      );
+
+      expect(prompt).toContain('Past classifications for this payee');
+      expect(prompt).toContain('match: exact');
+      expect(prompt).toContain('rewe markt gmbh');
+      expect(prompt).toContain('Most recent examples:');
+      expect(prompt).toContain('"Rewe Markt Gmbh (DE80 XXX 0759)" → Groceries');
+      expect(prompt).toContain('12 prior: 12× Groceries');
+    });
+
+    it('is silent when payeeHistory is null', () => {
+      const promptGenerator = new PromptGenerator(promptTemplate);
+      const prompt = promptGenerator.generate(
+        baseCategoryGroups(),
+        baseTx(),
+        basePayees(),
+        [],
+        null,
+      );
+      expect(prompt).not.toContain('Past classifications for this payee');
+      expect(prompt).not.toContain('Most recent examples');
+    });
+
+    it('is silent when payeeHistory.entries is empty', () => {
+      const promptGenerator = new PromptGenerator(promptTemplate);
+      const prompt = promptGenerator.generate(
+        baseCategoryGroups(),
+        baseTx(),
+        basePayees(),
+        [],
+        {
+          normalizedKey: 'rewe markt gmbh',
+          matchType: 'exact',
+          histogramLine: '',
+          entries: [],
+          histogram: new Map(),
+        },
+      );
+      expect(prompt).not.toContain('Past classifications for this payee');
+    });
+
+    it('histogram line tails count transactions, not categories', () => {
+      // 7 distinct categories, total 100 transactions.
+      // With fewShotHistogramTopN=5: top 5 sum=98, tail 2 sum=2.
+      // Bug variant would print "+2 others" (number of categories);
+      // correct variant prints "+2 in other categories" (sum of tail counts).
+      const histogram = new Map<string, number>([
+        ['A', 50], ['B', 30], ['C', 10], ['D', 5], ['E', 3], ['F', 1], ['G', 1],
+      ]);
+
+      const promptGenerator = new PromptGenerator(promptTemplate);
+      const prompt = promptGenerator.generate(
+        baseCategoryGroups(),
+        baseTx(),
+        basePayees(),
+        [],
+        {
+          normalizedKey: 'merchant x',
+          matchType: 'exact',
+          histogramLine: '',
+          entries: [
+            {
+              date: '2026-04-20', amount: 1, importedPayee: 'Merchant X', categoryName: 'A',
+            },
+          ],
+          histogram,
+        },
+      );
+
+      expect(prompt).toContain('100 prior:');
+      expect(prompt).toContain('50× A');
+      expect(prompt).toContain('30× B');
+      expect(prompt).toContain('10× C');
+      expect(prompt).toContain('5× D');
+      expect(prompt).toContain('3× E');
+      // tail must reflect the SUM of the trailing-bucket counts (1+1=2),
+      // not the count of trailing categories.
+      expect(prompt).toContain('+2 in other categories');
+      expect(prompt).not.toContain('+2 others,');
+    });
+
+    it('omits the tail clause when histogram fits within topN', () => {
+      const histogram = new Map<string, number>([['A', 5], ['B', 3]]);
+      const promptGenerator = new PromptGenerator(promptTemplate);
+      const prompt = promptGenerator.generate(
+        baseCategoryGroups(),
+        baseTx(),
+        basePayees(),
+        [],
+        {
+          normalizedKey: 'merchant y',
+          matchType: 'fuzzy',
+          histogramLine: '',
+          entries: [
+            {
+              date: '2026-04-20', amount: 1, importedPayee: 'Merchant Y', categoryName: 'A',
+            },
+          ],
+          histogram,
+        },
+      );
+      expect(prompt).toContain('8 prior: 5× A, 3× B');
+      expect(prompt).not.toContain('in other categories');
+    });
+  });
 });
