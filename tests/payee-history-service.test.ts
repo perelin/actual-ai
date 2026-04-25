@@ -145,6 +145,36 @@ describe('PayeeHistoryService', () => {
     expect(match.matchType).toBe('none');
   });
 
+  it('exposes matchedKeys for diagnostic logging on fuzzy matches', () => {
+    const transactions = [
+      tx('1', 'Deutsche Telekom Ag', 'cat-groceries', '', '2024-01-01'),
+      tx('2', 'Deutsche Bank Ag', 'cat-travel', '', '2024-01-02'),
+    ];
+    const service = new PayeeHistoryService(transactions, categories, emptyBlocklist, sim, {
+      exactMatchTarget: 3,
+      fuzzyThreshold: 0.5,
+    });
+    const match = service.getMatch(tx('new', 'Deutsche Post Ag', undefined));
+    expect(match.matchType).toBe('fuzzy');
+    expect(match.matchedKeys).toBeDefined();
+    expect(match.matchedKeys!.length).toBeGreaterThan(0);
+    expect(match.matchedKeys!.every((k) => typeof k === 'string')).toBe(true);
+  });
+
+  it('exposes matchedKeys=[normalizedKey] for exact matches', () => {
+    const transactions = [
+      tx('1', 'Rewe Markt Gmbh', 'cat-groceries', '', '2024-01-01'),
+      tx('2', 'Rewe Markt Gmbh', 'cat-groceries', '', '2024-01-02'),
+      tx('3', 'Rewe Markt Gmbh', 'cat-groceries', '', '2024-01-03'),
+    ];
+    const service = new PayeeHistoryService(transactions, categories, emptyBlocklist, sim, {
+      exactMatchTarget: 3,
+    });
+    const match = service.getMatch(tx('new', 'Rewe Markt Gmbh', undefined));
+    expect(match.matchType).toBe('exact');
+    expect(match.matchedKeys).toEqual(['rewe markt gmbh']);
+  });
+
   it('returns sorted entries (most recent first)', () => {
     const transactions = [
       tx('1', 'Rewe Markt Gmbh', 'cat-groceries', '', '2024-01-01'),

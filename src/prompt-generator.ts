@@ -8,6 +8,7 @@ import {
 import PromptTemplateException from './exceptions/prompt-template-exception';
 import { isToolEnabled, fewShotHistogramTopN } from './config';
 import { transformRulesToDescriptions } from './utils/rule-utils';
+import { augmentCategoryGroups } from './category-augmentation';
 
 class PromptGenerator implements PromptGeneratorI {
   private readonly promptTemplate: string;
@@ -47,6 +48,11 @@ class PromptGenerator implements PromptGeneratorI {
       payees,
     );
 
+    // Inject per-category description / examples / disambiguation hints, and
+    // filter out categories marked excludeFromPrompt (historical / obsolete /
+    // system categories the LLM should not be offered).
+    const augmentedGroups = augmentCategoryGroups(groupsWithCategories);
+
     try {
       const webSearchEnabled = (typeof isToolEnabled('webSearch') === 'boolean' && isToolEnabled('webSearch'))
         || (typeof isToolEnabled('freeWebSearch') === 'boolean' && isToolEnabled('freeWebSearch'));
@@ -69,10 +75,15 @@ class PromptGenerator implements PromptGeneratorI {
           entries: payeeHistory.entries,
           histogram: payeeHistory.histogram,
         };
+      } else if (payeeHistory && payeeHistory.matchType === 'aggregator-skip') {
+        // Pass the aggregator-skip marker through with empty entries so the
+        // template can render an explicit "this is an aggregator, prefer skip"
+        // hint instead of the histogram block.
+        formattedHistory = payeeHistory;
       }
 
       return template({
-        categoryGroups: groupsWithCategories,
+        categoryGroups: augmentedGroups,
         rules: rulesDescription,
         amount: Math.abs(transaction.amount),
         type: transaction.amount > 0 ? 'Income' : 'Outcome',

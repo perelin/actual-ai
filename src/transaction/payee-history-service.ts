@@ -14,6 +14,11 @@ export interface PayeeHistoryMatch {
   histogram: Map<string, number>;
   matchType: 'exact' | 'fuzzy' | 'aggregator-skip' | 'none';
   normalizedKey: string;
+  // Stored bucket keys this match drew from. For 'fuzzy' matches this is the
+  // list of keys whose similarity passed the threshold (excluding the input
+  // key itself). For 'exact' it is just [normalizedKey]. Used for diagnostic
+  // logging so fuzzy false positives can be identified after the fact.
+  matchedKeys?: string[];
 }
 
 interface PayeeHistoryServiceOpts {
@@ -90,23 +95,26 @@ class PayeeHistoryService {
 
     const exactBucket = this.index.get(key);
     if (exactBucket && exactBucket.length >= this.opts.exactMatchTarget) {
-      return this.buildResult(exactBucket, key, 'exact');
+      return this.buildResult(exactBucket, key, 'exact', [key]);
     }
 
     const fuzzyBuckets: TransactionEntity[] = [];
+    const matchedKeys: string[] = [];
     this.index.forEach((bucket, storedKey) => {
       if (storedKey === key) {
         fuzzyBuckets.push(...bucket);
+        matchedKeys.push(storedKey);
         return;
       }
       const sim = this.similarityCalculator.calculateNameSimilarity(key, storedKey);
       if (sim >= this.opts.fuzzyThreshold) {
         fuzzyBuckets.push(...bucket);
+        matchedKeys.push(storedKey);
       }
     });
 
     if (fuzzyBuckets.length > 0) {
-      return this.buildResult(fuzzyBuckets, key, 'fuzzy');
+      return this.buildResult(fuzzyBuckets, key, 'fuzzy', matchedKeys);
     }
 
     return PayeeHistoryService.emptyMatch(key, 'none');
@@ -133,6 +141,7 @@ class PayeeHistoryService {
     bucket: TransactionEntity[],
     normalizedKey: string,
     matchType: 'exact' | 'fuzzy',
+    matchedKeys: string[],
   ): PayeeHistoryMatch {
     const sorted = [...bucket].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')).reverse();
 
@@ -156,6 +165,7 @@ class PayeeHistoryService {
       histogram,
       matchType,
       normalizedKey,
+      matchedKeys,
     };
   }
 }

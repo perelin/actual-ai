@@ -128,7 +128,7 @@ export interface PayeeHistoryEntry {
 
 export interface PayeeHistoryView {
   normalizedKey: string;
-  matchType: 'exact' | 'fuzzy';
+  matchType: 'exact' | 'fuzzy' | 'aggregator-skip';
   histogramLine: string;
   entries: PayeeHistoryEntry[];
   histogram: Map<string, number>;

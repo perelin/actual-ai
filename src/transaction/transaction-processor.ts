@@ -56,9 +56,12 @@ class TransactionProcessor {
       if (payeeHistoryService) {
         const match = payeeHistoryService.getMatch(transaction);
         const totalPrior = [...match.histogram.values()].reduce((a, b) => a + b, 0);
+        const matchedKeysSuffix = match.matchType === 'fuzzy' && match.matchedKeys?.length
+          ? ` matched_keys=[${match.matchedKeys.map((k) => `"${k}"`).join(', ')}]`
+          : '';
         console.log(
           `[few-shot] tx=${transaction.id} payee="${transaction.imported_payee ?? ''}" `
-          + `key="${match.normalizedKey}" match=${match.matchType} prior=${totalPrior}`,
+          + `key="${match.normalizedKey}" match=${match.matchType} prior=${totalPrior}${matchedKeysSuffix}`,
         );
         if (match.matchType === 'exact' || match.matchType === 'fuzzy') {
           payeeHistoryView = {
@@ -72,6 +75,17 @@ class TransactionProcessor {
               categoryName: payeeHistoryService.getCategoryName(e.category),
             })),
             histogram: match.histogram,
+          };
+        } else if (match.matchType === 'aggregator-skip') {
+          // Surface aggregator-skip context to the prompt: the LLM should not
+          // try to guess; if description/notes don't reveal the real merchant,
+          // it should skip.
+          payeeHistoryView = {
+            normalizedKey: match.normalizedKey,
+            matchType: match.matchType,
+            histogramLine: '',
+            entries: [],
+            histogram: new Map<string, number>(),
           };
         }
       }
