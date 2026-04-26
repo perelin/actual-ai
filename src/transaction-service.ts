@@ -25,18 +25,22 @@ class TransactionService implements TransactionServiceI {
 
   private readonly isDryRun: boolean;
 
+  private readonly maxTransactions: number | undefined;
+
   constructor(
     actualApiClient: ActualApiServiceI,
     categorySuggester: CategorySuggester,
     transactionProcessor: BatchTransactionProcessor,
     transactionFilterer: TransactionFilterer,
     isDryRun: boolean,
+    maxTransactions?: number,
   ) {
     this.actualApiService = actualApiClient;
     this.categorySuggester = categorySuggester;
     this.transactionProcessor = transactionProcessor;
     this.transactionFilterer = transactionFilterer;
     this.isDryRun = isDryRun;
+    this.maxTransactions = maxTransactions;
   }
 
   async processTransactions(): Promise<void> {
@@ -69,6 +73,8 @@ class TransactionService implements TransactionServiceI {
       return;
     }
 
+    const transactionsToProcess = this.applyMaxTransactionsLimit(uncategorizedTransactions);
+
     let payeeHistoryService: PayeeHistoryService | null = null;
     if (usePayeeHistory) {
       const flatCategories = categories.map((c) => ({ id: c.id, name: c.name }));
@@ -92,7 +98,7 @@ class TransactionService implements TransactionServiceI {
     }>();
 
     await this.transactionProcessor.process(
-      uncategorizedTransactions,
+      transactionsToProcess,
       categoryGroups,
       payees,
       rules,
@@ -105,10 +111,29 @@ class TransactionService implements TransactionServiceI {
     if (isFeatureEnabled('suggestNewCategories') && suggestedCategories.size > 0) {
       await this.categorySuggester.suggest(
         suggestedCategories,
-        uncategorizedTransactions,
+        transactionsToProcess,
         categoryGroups,
       );
     }
+  }
+
+  private applyMaxTransactionsLimit(
+    uncategorized: TransactionEntity[],
+  ): TransactionEntity[] {
+    const limit = this.maxTransactions;
+    if (limit === undefined || uncategorized.length <= limit) {
+      return uncategorized;
+    }
+
+    // Sort newest-first by date so the limited sample is "the N most recent
+    // uncategorized transactions across all accounts" — reproducible and the
+    // most representative slice for dry-run validation.
+    const sorted = [...uncategorized].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+    const limited = sorted.slice(0, limit);
+    console.log(
+      `MAX_TRANSACTIONS=${limit}: limiting to ${limited.length} of ${uncategorized.length} uncategorized transactions (newest-first by date)`,
+    );
+    return limited;
   }
 }
 

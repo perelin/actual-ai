@@ -532,6 +532,104 @@ describe('ActualAiService', () => {
     createCategorySpy.mockRestore();
   });
 
+  describe('max transactions limit', () => {
+    function buildServiceWithLimit(limit: number | undefined): TransactionService {
+      const tagService = new TagService(NOT_GUESSED_TAG, GUESSED_TAG);
+      const ruleMatchStrategy = new RuleMatchStrategy(inMemoryApiService, tagService);
+      const existingCategoryStrategy = new ExistingCategoryStrategy(
+        inMemoryApiService,
+        tagService,
+      );
+      const categorySuggester = new CategorySuggester(
+        inMemoryApiService,
+        new CategorySuggestionOptimizer(new SimilarityCalculator()),
+        tagService,
+      );
+      const processor = new TransactionProcessor(
+        inMemoryApiService,
+        mockedLlmService,
+        mockedPromptGenerator,
+        tagService,
+        [ruleMatchStrategy, existingCategoryStrategy, new NewCategoryStrategy()],
+      );
+      const batch = new BatchTransactionProcessor(processor, 20);
+      return new TransactionService(
+        inMemoryApiService,
+        categorySuggester,
+        batch,
+        new TransactionFilterer(tagService),
+        false,
+        limit,
+      );
+    }
+
+    it('processes only the newest N transactions when MAX_TRANSACTIONS is set', async () => {
+      // Arrange: 4 uncategorized transactions, dates spread over 4 months.
+      const t1 = GivenActualData.createTransaction('1', -10, 'Old', '', undefined, undefined, '2024-01-01');
+      const t2 = GivenActualData.createTransaction('2', -20, 'Mid1', '', undefined, undefined, '2024-02-01');
+      const t3 = GivenActualData.createTransaction('3', -30, 'Mid2', '', undefined, undefined, '2024-03-01');
+      const t4 = GivenActualData.createTransaction('4', -40, 'Newest', '', undefined, undefined, '2024-04-01');
+      inMemoryApiService.setTransactions([t1, t2, t3, t4]);
+      mockedLlmService.setGuess(GivenActualData.CATEGORY_GROCERIES);
+
+      const limited = buildServiceWithLimit(2);
+      sut = new ActualAiService(
+        limited,
+        inMemoryApiService,
+        new NotesMigrator(inMemoryApiService, new TagService(NOT_GUESSED_TAG, GUESSED_TAG)),
+      );
+
+      // Act
+      await sut.classify();
+
+      // Assert: only the 2 newest get a category; the 2 oldest are untouched.
+      const updated = await inMemoryApiService.getTransactions();
+      const byId = (id: string) => updated.find((t) => t.id === id)!;
+      expect(byId('4').category).toBe(GivenActualData.CATEGORY_GROCERIES);
+      expect(byId('3').category).toBe(GivenActualData.CATEGORY_GROCERIES);
+      expect(byId('2').category).toBeUndefined();
+      expect(byId('1').category).toBeUndefined();
+    });
+
+    it('processes all transactions when MAX_TRANSACTIONS is undefined', async () => {
+      const t1 = GivenActualData.createTransaction('1', -10, 'A', '', undefined, undefined, '2024-01-01');
+      const t2 = GivenActualData.createTransaction('2', -20, 'B', '', undefined, undefined, '2024-02-01');
+      inMemoryApiService.setTransactions([t1, t2]);
+      mockedLlmService.setGuess(GivenActualData.CATEGORY_GROCERIES);
+
+      const unlimited = buildServiceWithLimit(undefined);
+      sut = new ActualAiService(
+        unlimited,
+        inMemoryApiService,
+        new NotesMigrator(inMemoryApiService, new TagService(NOT_GUESSED_TAG, GUESSED_TAG)),
+      );
+
+      await sut.classify();
+
+      const updated = await inMemoryApiService.getTransactions();
+      expect(updated.find((t) => t.id === '1')!.category).toBe(GivenActualData.CATEGORY_GROCERIES);
+      expect(updated.find((t) => t.id === '2')!.category).toBe(GivenActualData.CATEGORY_GROCERIES);
+    });
+
+    it('processes everything when fewer transactions exist than the limit', async () => {
+      const t1 = GivenActualData.createTransaction('1', -10, 'A', '', undefined, undefined, '2024-01-01');
+      inMemoryApiService.setTransactions([t1]);
+      mockedLlmService.setGuess(GivenActualData.CATEGORY_GROCERIES);
+
+      const limited = buildServiceWithLimit(50);
+      sut = new ActualAiService(
+        limited,
+        inMemoryApiService,
+        new NotesMigrator(inMemoryApiService, new TagService(NOT_GUESSED_TAG, GUESSED_TAG)),
+      );
+
+      await sut.classify();
+
+      const updated = await inMemoryApiService.getTransactions();
+      expect(updated.find((t) => t.id === '1')!.category).toBe(GivenActualData.CATEGORY_GROCERIES);
+    });
+  });
+
   describe('dry run mode', () => {
     let dryRunApiService: InMemoryActualApiService;
     let dryRunTransactionService: TransactionService;

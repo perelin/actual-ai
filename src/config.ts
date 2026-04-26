@@ -24,6 +24,22 @@ const parsedLlmTimeoutMs = Number.parseInt(process.env.LLM_TIMEOUT_MS ?? '', 10)
 export const llmTimeoutMs = Number.isFinite(parsedLlmTimeoutMs) && parsedLlmTimeoutMs > 0
   ? parsedLlmTimeoutMs
   : 120_000;
+
+export function parseMaxTransactions(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw.trim() === '') return undefined;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(
+      `Invalid MAX_TRANSACTIONS value '${raw}': must be a positive integer (e.g. 100). `
+      + 'Leave unset to process all uncategorized transactions.',
+    );
+  }
+  return parsed;
+}
+
+export const maxTransactions: number | undefined = parseMaxTransactions(
+  process.env.MAX_TRANSACTIONS,
+);
 export const openrouterEnableToolCalling = process.env.OPENROUTER_ENABLE_TOOL_CALLING === 'true';
 export const anthropicApiKey = process.env.ANTHROPIC_API_KEY ?? '';
 export const anthropicBaseURL = process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com/v1';
