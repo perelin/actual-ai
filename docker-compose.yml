@@ -97,7 +97,7 @@ services:
     container_name: actual-ai-live
     environment:
       #FEATURES: '["classifyOnStartup","freeWebSearch"]'
-      FEATURES: '["classifyOnStartup"]'
+      FEATURES: '["classifyOnStartup", "fewShotPayeeHistory"]'
       PROMPT_TEMPLATE: *prompt-template
 
   # Read-only diagnostic: dumps imported_payee analytics from the live Actual
