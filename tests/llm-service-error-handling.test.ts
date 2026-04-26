@@ -38,8 +38,9 @@ describe('LlmService error handling', () => {
 
     const svc = new LlmService(llmModelFactory, rateLimiter, true, undefined);
 
-    await expect(svc.ask('prompt')).rejects.toThrow('Rate limit reached');
-    await expect(svc.ask('prompt')).rejects.not.toThrow('Invalid response format from LLM');
+    const split = { staticPart: 'static', variablePart: 'variable' };
+    await expect(svc.ask(split)).rejects.toThrow('Rate limit reached');
+    await expect(svc.ask(split)).rejects.not.toThrow('Invalid response format from LLM');
   });
 
   test('wraps invalid JSON responses as invalid response format', async () => {
@@ -64,6 +65,6 @@ describe('LlmService error handling', () => {
 
     const svc = new LlmService(llmModelFactory, rateLimiter, true, undefined);
 
-    await expect(svc.ask('prompt')).rejects.toThrow('Invalid response format from LLM');
+    await expect(svc.ask({ staticPart: 'static', variablePart: 'variable' })).rejects.toThrow('Invalid response format from LLM');
   });
 });

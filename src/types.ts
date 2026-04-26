@@ -99,8 +99,13 @@ export interface UnifiedResponse {
   newCategory?: CategorySuggestion;
 }
 
+export interface SplitPrompt {
+  staticPart: string;
+  variablePart: string;
+}
+
 export interface LlmServiceI {
-  ask(prompt: string): Promise<UnifiedResponse>;
+  ask(prompt: SplitPrompt): Promise<UnifiedResponse>;
 }
 
 export interface ToolServiceI {
@@ -116,7 +121,7 @@ export interface PromptGeneratorI {
     payees: APIPayeeEntity[],
     rules: RuleEntity[],
     payeeHistory?: PayeeHistoryView | null,
-  ): string;
+  ): SplitPrompt;
 }
 
 export interface PayeeHistoryEntry {

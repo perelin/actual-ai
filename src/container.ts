@@ -35,7 +35,8 @@ import {
   openrouterReferrer,
   openrouterTitle,
   password,
-  promptTemplate,
+  promptStaticTemplate,
+  promptVariableTemplate,
   serverURL,
   valueSerpApiKey,
 } from './config';
@@ -102,7 +103,8 @@ const actualApiService = new ActualApiService(
 );
 
 const promptGenerator = new PromptGenerator(
-  promptTemplate,
+  promptStaticTemplate,
+  promptVariableTemplate,
 );
 
 const llmService = new LlmService(

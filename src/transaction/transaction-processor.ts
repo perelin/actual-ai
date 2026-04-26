@@ -90,7 +90,7 @@ class TransactionProcessor {
         }
       }
 
-      const prompt = this.promptGenerator.generate(
+      const splitPrompt = this.promptGenerator.generate(
         categoryGroups,
         transaction,
         payees,
@@ -98,7 +98,7 @@ class TransactionProcessor {
         payeeHistoryView,
       );
 
-      const response = await this.llmService.ask(prompt);
+      const response = await this.llmService.ask(splitPrompt);
 
       const strategy = this.processingStrategies.find((s) => s.isSatisfiedBy(response));
       if (strategy) {

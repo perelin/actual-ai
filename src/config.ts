@@ -2,7 +2,10 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import normalizePayee from './utils/payee-normalizer';
 
-const defaultPromptTemplate = fs.readFileSync('./src/templates/prompt.hbs', 'utf8').trim();
+const defaultPromptStaticTemplate = fs
+  .readFileSync('./src/templates/prompt-static.hbs', 'utf8').trim();
+const defaultPromptVariableTemplate = fs
+  .readFileSync('./src/templates/prompt-variable.hbs', 'utf8').trim();
 
 dotenv.config();
 
@@ -50,7 +53,10 @@ export const googleApiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? '';
 export const ollamaBaseURL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434/api';
 export const ollamaModel = process.env.OLLAMA_MODEL ?? 'llama3.1';
 export const dataDir = '/tmp/actual-ai/';
-export const promptTemplate = process.env.PROMPT_TEMPLATE ?? defaultPromptTemplate;
+export const promptStaticTemplate = process.env.PROMPT_TEMPLATE_STATIC
+  ?? defaultPromptStaticTemplate;
+export const promptVariableTemplate = process.env.PROMPT_TEMPLATE_VARIABLE
+  ?? defaultPromptVariableTemplate;
 export const notGuessedTag = process.env.NOT_GUESSED_TAG ?? '#actual-ai-miss';
 export const guessedTag = process.env.GUESSED_TAG ?? '#actual-ai';
 export const groqApiKey = process.env.GROQ_API_KEY ?? '';

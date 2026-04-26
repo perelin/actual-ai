@@ -4,6 +4,7 @@ import handlebars from './handlebars-helpers';
 import {
   PromptGeneratorI,
   PayeeHistoryView,
+  SplitPrompt,
 } from './types';
 import PromptTemplateException from './exceptions/prompt-template-exception';
 import { isToolEnabled, fewShotHistogramTopN } from './config';
@@ -11,12 +12,16 @@ import { transformRulesToDescriptions } from './utils/rule-utils';
 import { augmentCategoryGroups } from './category-augmentation';
 
 class PromptGenerator implements PromptGeneratorI {
-  private readonly promptTemplate: string;
+  private readonly staticTemplate: string;
+
+  private readonly variableTemplate: string;
 
   constructor(
-    promptTemplate: string,
+    staticTemplate: string,
+    variableTemplate: string,
   ) {
-    this.promptTemplate = promptTemplate;
+    this.staticTemplate = staticTemplate;
+    this.variableTemplate = variableTemplate;
   }
 
   generate(
@@ -25,17 +30,18 @@ class PromptGenerator implements PromptGeneratorI {
     payees: APIPayeeEntity[],
     rules: RuleEntity[],
     payeeHistory?: PayeeHistoryView | null,
-  ): string {
-    let template;
+  ): SplitPrompt {
+    let compiledStatic;
+    let compiledVariable;
     try {
-      template = handlebars.compile(this.promptTemplate);
+      compiledStatic = handlebars.compile(this.staticTemplate);
+      compiledVariable = handlebars.compile(this.variableTemplate);
     } catch {
       console.error('Error generating prompt. Check syntax of your template.');
       throw new PromptTemplateException('Error generating prompt. Check syntax of your template.');
     }
     const payeeName = payees.find((payee) => payee.id === transaction.payee)?.name;
 
-    // Ensure each category group has its categories property
     const groupsWithCategories = categoryGroups.map((group) => ({
       ...group,
       groupName: group.name,
@@ -48,43 +54,41 @@ class PromptGenerator implements PromptGeneratorI {
       payees,
     );
 
-    // Inject per-category description / examples / disambiguation hints, and
-    // filter out categories marked excludeFromPrompt (historical / obsolete /
-    // system categories the LLM should not be offered).
     const augmentedGroups = augmentCategoryGroups(groupsWithCategories);
+
+    let formattedHistory: PayeeHistoryView | undefined;
+    if (payeeHistory && payeeHistory.entries.length > 0) {
+      const sorted = [...payeeHistory.histogram.entries()]
+        .sort((a, b) => b[1] - a[1]);
+      const topN = sorted.slice(0, fewShotHistogramTopN);
+      const tail = sorted.slice(fewShotHistogramTopN);
+      const topLine = topN.map(([name, count]) => `${count}× ${name}`).join(', ');
+      const total = sorted.reduce((sum, e) => sum + e[1], 0);
+      const tailTotal = tail.reduce((sum, e) => sum + e[1], 0);
+      const histogramLine = `${total} prior: ${topLine}${tailTotal > 0 ? `, +${tailTotal} in other categories` : ''}`;
+
+      formattedHistory = {
+        normalizedKey: payeeHistory.normalizedKey,
+        matchType: payeeHistory.matchType,
+        histogramLine,
+        entries: payeeHistory.entries,
+        histogram: payeeHistory.histogram,
+      };
+    } else if (payeeHistory && payeeHistory.matchType === 'aggregator-skip') {
+      formattedHistory = payeeHistory;
+    }
 
     try {
       const webSearchEnabled = (typeof isToolEnabled('webSearch') === 'boolean' && isToolEnabled('webSearch'))
         || (typeof isToolEnabled('freeWebSearch') === 'boolean' && isToolEnabled('freeWebSearch'));
 
-      let formattedHistory: PayeeHistoryView | undefined;
-      if (payeeHistory && payeeHistory.entries.length > 0) {
-        const sorted = [...payeeHistory.histogram.entries()]
-          .sort((a, b) => b[1] - a[1]);
-        const topN = sorted.slice(0, fewShotHistogramTopN);
-        const tail = sorted.slice(fewShotHistogramTopN);
-        const topLine = topN.map(([name, count]) => `${count}× ${name}`).join(', ');
-        const total = sorted.reduce((sum, e) => sum + e[1], 0);
-        const tailTotal = tail.reduce((sum, e) => sum + e[1], 0);
-        const histogramLine = `${total} prior: ${topLine}${tailTotal > 0 ? `, +${tailTotal} in other categories` : ''}`;
-
-        formattedHistory = {
-          normalizedKey: payeeHistory.normalizedKey,
-          matchType: payeeHistory.matchType,
-          histogramLine,
-          entries: payeeHistory.entries,
-          histogram: payeeHistory.histogram,
-        };
-      } else if (payeeHistory && payeeHistory.matchType === 'aggregator-skip') {
-        // Pass the aggregator-skip marker through with empty entries so the
-        // template can render an explicit "this is an aggregator, prefer skip"
-        // hint instead of the histogram block.
-        formattedHistory = payeeHistory;
-      }
-
-      return template({
+      const staticContext = {
         categoryGroups: augmentedGroups,
         rules: rulesDescription,
+        hasWebSearchTool: webSearchEnabled,
+      };
+
+      const variableContext = {
         amount: Math.abs(transaction.amount),
         type: transaction.amount > 0 ? 'Income' : 'Outcome',
         description: transaction.notes ?? '',
@@ -93,9 +97,13 @@ class PromptGenerator implements PromptGeneratorI {
         date: transaction.date ?? '',
         cleared: transaction.cleared,
         reconciled: transaction.reconciled,
-        hasWebSearchTool: webSearchEnabled,
         payeeHistory: formattedHistory,
-      });
+      };
+
+      return {
+        staticPart: compiledStatic(staticContext).trim(),
+        variablePart: compiledVariable(variableContext).trim(),
+      };
     } catch {
       console.error('Error generating prompt. Check syntax of your template.');
       throw new PromptTemplateException('Error generating prompt. Check syntax of your template.');

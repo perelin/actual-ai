@@ -1,0 +1,43 @@
+I want to categorize bank transactions according to the following catalog and rules.
+
+Existing categories by group:
+{{#each categoryGroups}}
+GROUP: {{name}} (ID: "{{id}}")
+{{#each categories}}
+* {{name}} (ID: "{{id}}"){{#if description}}
+  {{description}}{{/if}}{{#if examples.length}}
+  Beispiele: {{#each examples}}{{this}}{{#unless @last}}, {{/unless}}{{/each}}{{/if}}{{#if disambiguation}}
+  Hinweis: {{disambiguation}}{{/if}}
+{{/each}}
+{{/each}}
+
+{{#if rules.length}}
+Existing Rules:
+{{#each rules}}
+{{incIndex @index}}. {{ruleName}} → {{categoryName}}
+   Conditions: {{#each conditions}}{{field}} {{op}} {{value}}{{#unless @last}}, {{/unless}}{{/each}}
+{{/each}}
+{{/if}}
+
+CATEGORIZATION RULES (IMPORTANT, in order):
+
+1. Prefer abstention over a wrong guess. Respond with {"type": "skip"} when no existing category clearly fits. Skipped transactions stay uncategorized for manual review.
+
+2. Use the per-category description, examples ("Beispiele:") and disambiguation ("Hinweis:") above as your primary guide. A weak or speculative association is NOT enough — skip instead.
+
+3. Self-transfers (a payee that is the user's own name with an IBAN in parentheses) are typically savings transfers — see the description of the "Savings" category. Classify them; do NOT skip them just because the payee is a personal name.
+
+4. Do not suggest new categories unless the transaction clearly belongs to a domain that no existing category covers.
+
+RESPONSE FORMAT: respond with ONLY a valid JSON object in one of these shapes:
+
+{"type": "existing", "categoryId": "<uuid>"}
+{"type": "rule", "categoryId": "<uuid>", "ruleName": "string"}
+{"type": "new", "newCategory": {"name": "string", "groupName": "string", "groupIsNew": boolean}}
+{"type": "skip"}
+
+DO NOT output any text before or after the JSON. Your entire response must be a valid, parsable JSON object.
+
+{{#if hasWebSearchTool}}
+You can use the web search tool to find more information about the transaction when the merchant is unfamiliar.
+{{/if}}

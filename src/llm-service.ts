@@ -1,10 +1,14 @@
-import { generateText, LanguageModel } from 'ai';
+import { generateText, LanguageModel, CoreMessage } from 'ai';
 import {
-  LlmModelFactoryI, LlmServiceI, ToolServiceI, UnifiedResponse,
+  LlmModelFactoryI, LlmServiceI, SplitPrompt, ToolServiceI, UnifiedResponse,
 } from './types';
 import RateLimiter from './utils/rate-limiter';
 import { PROVIDER_LIMITS } from './utils/provider-limits';
 import { parseLlmResponse } from './utils/json-utils';
+
+function joinPrompt(prompt: SplitPrompt): string {
+  return `${prompt.staticPart}\n\n${prompt.variablePart}`;
+}
 
 export default class LlmService implements LlmServiceI {
   private readonly model: LanguageModel;
@@ -40,7 +44,6 @@ export default class LlmService implements LlmServiceI {
     this.timeoutMs = options?.timeoutMs ?? 120_000;
     this.openrouterEnableToolCalling = options?.openrouterEnableToolCalling ?? false;
 
-    // Set rate limits for the provider
     const limits = PROVIDER_LIMITS[this.provider];
     if (!isRateLimitDisabled && limits) {
       this.rateLimiter.setProviderLimit(this.provider, limits.requestsPerMinute);
@@ -57,7 +60,6 @@ export default class LlmService implements LlmServiceI {
 
     try {
       console.log(`Performing web search for: "${query}"`);
-      // Keep method bound to the instance; some implementations read instance state.
       const searchResult = await this.toolService.search?.(query);
       if (searchResult !== undefined) {
         return searchResult;
@@ -69,12 +71,12 @@ export default class LlmService implements LlmServiceI {
     }
   }
 
-  public async ask(prompt: string): Promise<UnifiedResponse> {
+  public async ask(prompt: SplitPrompt): Promise<UnifiedResponse> {
     try {
       console.log(`Making LLM request to ${this.provider}${this.isFallbackMode ? ' (fallback mode)' : ''}`);
 
       if (this.isFallbackMode) {
-        const response = await this.askUsingFallbackModel(prompt);
+        const response = await this.askUsingFallbackModel(joinPrompt(prompt));
         const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
         if (!uuidRegex.test(response)) {
           console.warn('If you are using ollama and you see it all the time, check the ollama api logs.'
@@ -90,25 +92,16 @@ export default class LlmService implements LlmServiceI {
       return this.rateLimiter.executeWithRateLimiting(this.provider, async () => {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-        // Some OpenAI-compatible gateways/models (notably via OpenRouter) don't reliably support
-        // tool/function-calling. We still keep ToolService around for manual/pre-prompt searches,
-        // but disable model tool-calling to avoid malformed outputs.
         const disableOpenRouterTools = this.provider === 'openrouter' && !this.openrouterEnableToolCalling;
         const tools = disableOpenRouterTools ? undefined : this.toolService?.getTools();
         try {
-          const { text } = await generateText({
-            model: this.model,
-            prompt,
-            temperature: 0.2,
-            tools,
-            maxSteps: tools ? 3 : 1,
-            abortSignal: controller.signal,
-          });
+          const generateArgs = this.buildGenerateArgs(prompt, tools, controller.signal);
+          const result = await generateText(generateArgs);
 
-          // Only wrap parsing/validation errors; transport/provider errors must bubble up so the
-          // RateLimiter can apply provider-specific backoff/retry behavior.
+          this.logUsage(result);
+
           try {
-            return parseLlmResponse(text);
+            return parseLlmResponse(result.text);
           } catch (error) {
             console.error('LLM response validation failed:', error);
             throw new Error('Invalid response format from LLM');
@@ -122,6 +115,68 @@ export default class LlmService implements LlmServiceI {
       console.error(`Error during LLM request to ${this.provider}: ${errorMsg}`);
       throw error;
     }
+  }
+
+  private buildGenerateArgs(
+    prompt: SplitPrompt,
+    tools: Record<string, unknown> | undefined,
+    abortSignal: AbortSignal,
+  ): Parameters<typeof generateText>[0] {
+    const base = {
+      model: this.model,
+      temperature: 0.2,
+      tools: tools as Parameters<typeof generateText>[0]['tools'],
+      maxSteps: tools ? 3 : 1,
+      abortSignal,
+    };
+
+    // Anthropic provider supports native prompt caching: mark the static block
+    // with cache_control so it's stored once and read back at ~10% input cost
+    // for every subsequent transaction in the run.
+    if (this.provider === 'anthropic') {
+      const messages: CoreMessage[] = [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: prompt.staticPart,
+              providerOptions: {
+                anthropic: { cacheControl: { type: 'ephemeral' } },
+              },
+            },
+            { type: 'text', text: prompt.variablePart },
+          ],
+        },
+      ];
+      return { ...base, messages };
+    }
+
+    // Other providers (openai/openrouter/google/groq): single string prompt.
+    // No cache_control passthrough — providers strip the field, see decision
+    // log in CLAUDE.md.
+    return { ...base, prompt: joinPrompt(prompt) };
+  }
+
+  private logUsage(result: Awaited<ReturnType<typeof generateText>>): void {
+    const usage = result.usage as
+      | { promptTokens?: number; completionTokens?: number; totalTokens?: number }
+      | undefined;
+    const meta = (result as unknown as {
+      experimental_providerMetadata?: {
+        anthropic?: {
+          cacheCreationInputTokens?: number;
+          cacheReadInputTokens?: number;
+        };
+      };
+    }).experimental_providerMetadata;
+    const cacheCreate = meta?.anthropic?.cacheCreationInputTokens ?? 0;
+    const cacheRead = meta?.anthropic?.cacheReadInputTokens ?? 0;
+    console.log(
+      `[llm-usage] provider=${this.provider} `
+      + `prompt=${usage?.promptTokens ?? 0} completion=${usage?.completionTokens ?? 0} `
+      + `cache_create=${cacheCreate} cache_read=${cacheRead}`,
+    );
   }
 
   public async askUsingFallbackModel(prompt: string): Promise<string> {

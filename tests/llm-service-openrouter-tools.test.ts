@@ -38,7 +38,7 @@ describe('LlmService OpenRouter tool-calling toggle', () => {
     };
 
     const svc = new LlmService(llmModelFactory, rateLimiter, true, toolService);
-    await svc.ask('prompt');
+    await svc.ask({ staticPart: 'static', variablePart: 'variable' });
 
     expect(generateTextMock).toHaveBeenCalledTimes(1);
     const firstCall = generateTextMock.mock.calls[0] as [unknown] | undefined;
@@ -78,7 +78,7 @@ describe('LlmService OpenRouter tool-calling toggle', () => {
     const svc = new LlmService(llmModelFactory, rateLimiter, true, toolService, {
       openrouterEnableToolCalling: true,
     });
-    await svc.ask('prompt');
+    await svc.ask({ staticPart: 'static', variablePart: 'variable' });
 
     expect(generateTextMock).toHaveBeenCalledTimes(1);
     const firstCall = generateTextMock.mock.calls[0] as [unknown] | undefined;

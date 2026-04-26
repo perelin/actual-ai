@@ -1,0 +1,31 @@
+Transaction details:
+* Amount: {{amount}}
+* Type: {{type}}
+{{#if description}}
+* Description: {{description}}
+{{/if}}
+{{#if payee}}
+* Payee: {{payee}}
+{{^}}
+* Payee: {{importedPayee}}
+{{/if}}
+{{#if date}}
+* Date: {{date}}
+{{/if}}
+{{#if payeeHistory}}
+{{#if (eq payeeHistory.matchType "aggregator-skip")}}
+
+Note: this payee is a known payment aggregator (PayPal/Klarna/Sumup/Amazon Payments/Apple-Bill style). The real merchant is hidden behind the payee name. If the description, notes, or amount do not clearly identify the actual merchant or category, respond with {"type": "skip"} — do not guess.
+{{else}}
+
+Past classifications for this payee (normalized: "{{payeeHistory.normalizedKey}}", match: {{payeeHistory.matchType}}):
+{{payeeHistory.histogramLine}}
+
+Most recent examples:
+{{#each payeeHistory.entries}}
+* {{date}} | amount {{amount}} | "{{importedPayee}}" → {{categoryName}}
+{{/each}}
+
+Use this history as a strong prior. Only deviate when the current transaction's amount, description, or notes clearly indicate a different category.
+{{/if}}
+{{/if}}

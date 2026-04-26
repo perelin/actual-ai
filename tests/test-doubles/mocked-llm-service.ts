@@ -1,4 +1,4 @@
-import { LlmServiceI, UnifiedResponse } from '../../src/types';
+import { LlmServiceI, SplitPrompt, UnifiedResponse } from '../../src/types';
 
 export default class MockedLlmService implements LlmServiceI {
   private guess = ''; // Type inferred
@@ -7,7 +7,7 @@ export default class MockedLlmService implements LlmServiceI {
 
   private error: Error | null = null;
 
-  async ask(_prompt: string, _categoryIds?: string[]): Promise<UnifiedResponse> {
+  async ask(_prompt: SplitPrompt, _categoryIds?: string[]): Promise<UnifiedResponse> {
     if (this.error) {
       return Promise.reject(this.error);
     }
