@@ -148,24 +148,13 @@ const batchTransactionProcessor = new BatchTransactionProcessor(
 
 const transactionFilterer = new TransactionFilterer(tagService);
 
-// MAX_TRANSACTIONS is a dry-run cost-control knob. Silently honouring it in live
-// mode would mean a `task live` run quietly stops after N transactions and leaves
-// the rest uncategorized — exactly the kind of footgun we don't want.
-if (!isDryRun && maxTransactions !== undefined) {
-  console.warn(
-    `MAX_TRANSACTIONS=${maxTransactions} is ignored in live mode — `
-    + 'the limit only applies to dry runs. Unset MAX_TRANSACTIONS to silence this warning.',
-  );
-}
-const effectiveMaxTransactions = isDryRun ? maxTransactions : undefined;
-
 const transactionService = new TransactionService(
   actualApiService,
   categorySuggester,
   batchTransactionProcessor,
   transactionFilterer,
   isDryRun,
-  effectiveMaxTransactions,
+  maxTransactions,
 );
 
 const notesMigrator = new NotesMigrator(
