@@ -175,7 +175,7 @@ registerStandardFeatures();
 registerToolFeatures();
 
 export const fewShotFuzzyThreshold = 0.7;
-export const fewShotExactMatchTarget = 3;
+export const fewShotExactMatchTarget = 1;
 export const fewShotMaxExamples = 5;
 export const fewShotHistogramTopN = 5;
 
