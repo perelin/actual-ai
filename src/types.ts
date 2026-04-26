@@ -105,7 +105,7 @@ export interface SplitPrompt {
 }
 
 export interface LlmServiceI {
-  ask(prompt: SplitPrompt): Promise<UnifiedResponse>;
+  ask(prompt: SplitPrompt, validCategoryIds?: Set<string>): Promise<UnifiedResponse>;
 }
 
 export interface ToolServiceI {

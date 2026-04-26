@@ -71,7 +71,10 @@ export default class LlmService implements LlmServiceI {
     }
   }
 
-  public async ask(prompt: SplitPrompt): Promise<UnifiedResponse> {
+  public async ask(
+    prompt: SplitPrompt,
+    validCategoryIds?: Set<string>,
+  ): Promise<UnifiedResponse> {
     try {
       console.log(`Making LLM request to ${this.provider}${this.isFallbackMode ? ' (fallback mode)' : ''}`);
 
@@ -89,32 +92,73 @@ export default class LlmService implements LlmServiceI {
         };
       }
 
-      return this.rateLimiter.executeWithRateLimiting(this.provider, async () => {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-        const disableOpenRouterTools = this.provider === 'openrouter' && !this.openrouterEnableToolCalling;
-        const tools = disableOpenRouterTools ? undefined : this.toolService?.getTools();
-        try {
-          const generateArgs = this.buildGenerateArgs(prompt, tools, controller.signal);
-          const result = await generateText(generateArgs);
+      const first = await this.askOnce(prompt);
 
-          this.logUsage(result);
-
-          try {
-            return parseLlmResponse(result.text);
-          } catch (error) {
-            console.error('LLM response validation failed:', error);
-            throw new Error('Invalid response format from LLM');
-          }
-        } finally {
-          clearTimeout(timer);
+      // Hallucination guard: if the model returned a categoryId that isn't in
+      // the project's category list, retry once with explicit feedback. The
+      // first run already paid the static-prompt cache_create; retry pays
+      // cache_read (~10%) plus the variable part — so cost is small.
+      if (
+        validCategoryIds
+        && first.categoryId
+        && !validCategoryIds.has(first.categoryId)
+      ) {
+        console.warn(
+          `[halluc-retry] LLM returned non-existent categoryId="${first.categoryId}" — `
+          + 'retrying with corrective feedback',
+        );
+        const retryPrompt: SplitPrompt = {
+          staticPart: prompt.staticPart,
+          variablePart:
+            `${prompt.variablePart}\n\n`
+            + 'CORRECTION: Your previous response used `categoryId: "'
+            + `${first.categoryId}"\` which is NOT one of the IDs listed in the category catalog above. `
+            + 'You must either copy a categoryId verbatim from the `(ID: "...")` annotations, '
+            + 'or respond with `{"type":"skip"}`. Do not invent UUIDs.',
+        };
+        const second = await this.askOnce(retryPrompt);
+        if (
+          second.categoryId
+          && !validCategoryIds.has(second.categoryId)
+        ) {
+          console.warn(
+            `[halluc-retry] retry still hallucinated categoryId="${second.categoryId}" — `
+            + 'falling through to not-guessed tag',
+          );
         }
-      });
+        return second;
+      }
+
+      return first;
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error(`Error during LLM request to ${this.provider}: ${errorMsg}`);
       throw error;
     }
+  }
+
+  private async askOnce(prompt: SplitPrompt): Promise<UnifiedResponse> {
+    return this.rateLimiter.executeWithRateLimiting(this.provider, async () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+      const disableOpenRouterTools = this.provider === 'openrouter' && !this.openrouterEnableToolCalling;
+      const tools = disableOpenRouterTools ? undefined : this.toolService?.getTools();
+      try {
+        const generateArgs = this.buildGenerateArgs(prompt, tools, controller.signal);
+        const result = await generateText(generateArgs);
+
+        this.logUsage(result);
+
+        try {
+          return parseLlmResponse(result.text);
+        } catch (error) {
+          console.error('LLM response validation failed:', error);
+          throw new Error('Invalid response format from LLM');
+        }
+      } finally {
+        clearTimeout(timer);
+      }
+    });
   }
 
   private buildGenerateArgs(

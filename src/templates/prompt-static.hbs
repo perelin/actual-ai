@@ -29,6 +29,8 @@ CATEGORIZATION RULES (IMPORTANT, in order):
 
 4. Do not suggest new categories unless the transaction clearly belongs to a domain that no existing category covers.
 
+5. CRITICAL — categoryId integrity: when responding with `{"type":"existing", ...}` or `{"type":"rule", ...}`, the `categoryId` MUST be copied verbatim from the `(ID: "...")` annotations in the category list above. Do NOT invent, modify, or paraphrase UUIDs. If you cannot find a category whose ID you can copy with full confidence, respond with `{"type":"skip"}` instead. A fabricated ID is treated as a wrong guess.
+
 RESPONSE FORMAT: respond with ONLY a valid JSON object in one of these shapes:
 
 {"type": "existing", "categoryId": "<uuid>"}

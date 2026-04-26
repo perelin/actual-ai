@@ -7,7 +7,7 @@ export default class MockedLlmService implements LlmServiceI {
 
   private error: Error | null = null;
 
-  async ask(_prompt: SplitPrompt, _categoryIds?: string[]): Promise<UnifiedResponse> {
+  async ask(_prompt: SplitPrompt, _validCategoryIds?: Set<string>): Promise<UnifiedResponse> {
     if (this.error) {
       return Promise.reject(this.error);
     }

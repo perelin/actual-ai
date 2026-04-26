@@ -98,7 +98,8 @@ class TransactionProcessor {
         payeeHistoryView,
       );
 
-      const response = await this.llmService.ask(splitPrompt);
+      const validCategoryIds = new Set(categories.map((c) => c.id));
+      const response = await this.llmService.ask(splitPrompt, validCategoryIds);
 
       const strategy = this.processingStrategies.find((s) => s.isSatisfiedBy(response));
       if (strategy) {
