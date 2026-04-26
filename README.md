@@ -136,29 +136,36 @@ OPENROUTER_ENABLE_TOOL_CALLING=true
 
 ## Customizing the Prompt
 
-To create a custom prompt, modify the `PROMPT_TEMPLATE` environment variable to include or exclude variables as needed.
-Ensure that the [Handlebars](https://handlebarsjs.com/) syntax is correctly used to handle conditional rendering and
-loops.
+The prompt is split into two [Handlebars](https://handlebarsjs.com/) templates so the run-static block can be cached
+across transactions (Anthropic prompt-caching, ~10% input cost on cache hit):
 
-### Variables
+- `src/templates/prompt-static.hbs` — categories, rules, categorization rules, response format. Identical for every
+  transaction in a run; sent with `cache_control: { type: 'ephemeral' }`.
+- `src/templates/prompt-variable.hbs` — transaction details + optional payee history. Re-rendered per transaction.
 
-1. `categoryGroups`: An array of category group objects. Each category group contains an array of categories.
-    - `categoryGroup` is object with the following properties:
-        - `id`: The ID of the category group.
-        - `name`: The name of the category group.
-        - `categories`: An array of category objects.
-            - `category` is an object with the following properties:
-                - `id`: The ID of the category.
-                - `name`: The name of the category.
-2. `amount`: The absolute value of the transaction amount.
-3. `type`: The type of transaction, either 'Income' or 'Outcome'.
-4. `description`: The notes or description of the transaction. This is taken from `transaction.notes`.
-5. `payee`: The name of the payee associated with the transaction. This is found by matching the payee ID in the
-   transaction with the payee list.
-6. `importedPayee`: The imported payee name from the transaction. This is taken from `transaction.imported_payee`.
-7. `date`: The date of the transaction. This is taken from `transaction.date`.
-8. `cleared`: A boolean indicating if the transaction is cleared. This is taken from `transaction.cleared`.
-9. `reconciled`: A boolean indicating if the transaction is reconciled. This is taken from `transaction.reconciled`.
+To override either template at runtime, set `PROMPT_TEMPLATE_STATIC` and/or `PROMPT_TEMPLATE_VARIABLE`. Putting
+per-transaction variables into the static template will silently disable caching — keep static and variable separated.
+
+### Variables available in `prompt-static.hbs`
+
+1. `categoryGroups`: an array of category group objects, each with an array of `categories`.
+   - `categoryGroup`: `{ id, name, categories[] }`
+   - `category`: `{ id, name, description?, examples?: string[], disambiguation? }` (description/examples/disambiguation
+     come from `category-augmentation.ts`)
+2. `rules`: an array of `{ ruleName, categoryName, conditions: [{ field, op, value }] }`
+3. `hasWebSearchTool`: boolean — true when `webSearch` or `freeWebSearch` feature is enabled
+
+### Variables available in `prompt-variable.hbs`
+
+1. `amount`: absolute transaction amount
+2. `type`: 'Income' or 'Outcome'
+3. `description`: `transaction.notes`
+4. `payee`: resolved payee name (falls back to `importedPayee`)
+5. `importedPayee`: `transaction.imported_payee`
+6. `date`: `transaction.date`
+7. `cleared` / `reconciled`: booleans from the transaction
+8. `payeeHistory`: optional `{ normalizedKey, matchType, histogramLine, entries[] }` — only set when
+   `fewShotPayeeHistory` is enabled and a match exists
 
 ## New Category Suggestions
 
