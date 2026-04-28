@@ -198,6 +198,39 @@ export const fewShotAggregatorBlocklist = new Set(
   fewShotAggregatorBlocklistRaw.map(normalizePayee),
 );
 
+// P2L-95: stopgap heuristic for inter-account transfers that Actual cannot
+// auto-pair via transfer_id (e.g. when the credit card is not a separate
+// Account). Each entry requires BOTH a payee-name substring AND a
+// notes-or-imported-payee-substring match — case-insensitive. Conservative
+// by design: do not add patterns that could match anything except a known
+// internal-balance-shift booking.
+export interface TransferFilterPattern {
+  payeeContains: string; // matched against tx.imported_payee (case-insensitive)
+  signalContains: string; // matched against tx.imported_payee + tx.notes
+}
+
+export const transferFilterPatterns: TransferFilterPattern[] = [
+  // SpK Heidelberg "EIGENE KREDITKARTENABRECHN." — internal balance shift
+  // from Girokonto to credit card statement. The credit card is not a
+  // separate Actual Account, so transfer_id is null. Conservative two-signal
+  // anchor: bank name + booking-text fragment.
+  { payeeContains: 'spk heidelberg', signalContains: 'eigene kreditkartenabrechn' },
+];
+
+export function isInternalTransferByPattern(
+  importedPayee: string | null | undefined,
+  notes: string | null | undefined,
+): boolean {
+  const ip = (importedPayee ?? '').toLowerCase();
+  const nt = (notes ?? '').toLowerCase();
+  const haystack = `${ip} ${nt}`;
+  return transferFilterPatterns.some(
+    ({ payeeContains, signalContains }) => (
+      ip.includes(payeeContains) && haystack.includes(signalContains)
+    ),
+  );
+}
+
 export function isAggregatorPrefix(normalized: string): boolean {
   return normalized.startsWith('sumup');
 }
