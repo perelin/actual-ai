@@ -190,6 +190,10 @@ export const fewShotAggregatorBlocklistRaw = [
   'Nexi Germany Gmbh (DE09 XXX 5340)',
 ];
 
+// All PayPal Europe imported_payee variants (with/without IBAN suffix, address
+// block, or "(Europe)" parens) collapse onto the canonical key 'paypal europe'
+// via normalizePayee — so a single entry suffices.
+
 export const fewShotAggregatorBlocklist = new Set(
   fewShotAggregatorBlocklistRaw.map(normalizePayee),
 );
