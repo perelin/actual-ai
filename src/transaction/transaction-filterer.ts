@@ -1,6 +1,6 @@
 import { TransactionEntity } from '@actual-app/core/src/types/models';
 import { APIAccountEntity } from '@actual-app/core/src/server/api-models';
-import { isFeatureEnabled } from '../config';
+import { isFeatureEnabled, isInternalTransferByPattern } from '../config';
 import TagService from './tag-service';
 
 class TransactionFilterer {
@@ -48,6 +48,15 @@ class TransactionFilterer {
       filteredTransactions,
       (transaction) => transaction.transfer_id === null || transaction.transfer_id === undefined,
       'Is a transfer',
+    );
+
+    filteredTransactions = this.applyFilter(
+      filteredTransactions,
+      (transaction) => !isInternalTransferByPattern(
+        transaction.imported_payee,
+        transaction.notes,
+      ),
+      'Matches internal-transfer heuristic (no transfer_id, payee+notes pattern)',
     );
 
     filteredTransactions = this.applyFilter(
