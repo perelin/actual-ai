@@ -302,4 +302,79 @@ describe('PromptGenerator', () => {
       expect(split.variablePart).not.toContain('in other categories');
     });
   });
+
+  describe('[enricher] notes (P2L-93)', () => {
+    it('passes a [enricher]-prefixed note verbatim into the variable Description line', () => {
+      const enricherNote = '[enricher] Amazon #305-1234567-8901234 USB-Hub; Schraubendreher (Σ 32.45 €) (2026-04-12)';
+      const transaction = GivenActualData.createTransaction(
+        'tx-amz-1',
+        -3245,
+        'AMZN Mktp DE',
+        enricherNote,
+        undefined,
+        undefined,
+        '2026-04-12',
+      );
+
+      const split = newGenerator().generate(
+        GivenActualData.createSampleCategoryGroups(),
+        transaction,
+        GivenActualData.createSamplePayees(),
+        [],
+      );
+
+      expect(split.variablePart).toContain(`* Description: ${enricherNote}`);
+    });
+
+    it('passes a [enricher-refund] note verbatim into the variable Description line', () => {
+      const refundNote = '[enricher-refund] Amazon #305-1234567-8901234 (Σ 12.99 €) (2026-04-15)';
+      const transaction = GivenActualData.createTransaction(
+        'tx-amz-refund',
+        1299,
+        'AMZN Mktp DE',
+        refundNote,
+        undefined,
+        undefined,
+        '2026-04-15',
+      );
+
+      const split = newGenerator().generate(
+        GivenActualData.createSampleCategoryGroups(),
+        transaction,
+        GivenActualData.createSamplePayees(),
+        [],
+      );
+
+      expect(split.variablePart).toContain(`* Description: ${refundNote}`);
+    });
+
+    it('static prompt instructs the LLM to treat [enricher] notes as authoritative merchant evidence', () => {
+      const transaction = GivenActualData.createTransaction(
+        '1',
+        -1000,
+        'Carrefour 2137',
+        '',
+        GivenActualData.PAYEE_CARREFOUR,
+        undefined,
+        '2021-01-01',
+      );
+
+      const split = newGenerator().generate(
+        GivenActualData.createSampleCategoryGroups(),
+        transaction,
+        GivenActualData.createSamplePayees(),
+        [],
+      );
+
+      // The static prompt must explicitly tell the LLM how to consume the
+      // structured note format produced by the enricher service. Without this,
+      // the LLM sees the note but does not consistently use it as merchant
+      // evidence (P2L-93: 107 Amazon-EU Tx with [enricher]-notes still missed).
+      expect(split.staticPart).toContain('[enricher]');
+      expect(split.staticPart).toContain('authoritative');
+      // Refund variant must also be acknowledged so the LLM treats negative-
+      // amount Tx with refund prefix correctly.
+      expect(split.staticPart).toContain('[enricher-refund]');
+    });
+  });
 });

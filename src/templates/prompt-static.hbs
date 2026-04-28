@@ -29,7 +29,13 @@ CATEGORIZATION RULES (IMPORTANT, in order):
 
 4. Do not suggest new categories unless the transaction clearly belongs to a domain that no existing category covers.
 
-5. CRITICAL — categoryId integrity: when responding with `{"type":"existing", ...}` or `{"type":"rule", ...}`, the `categoryId` MUST be copied verbatim from the `(ID: "...")` annotations in the category list above. Do NOT invent, modify, or paraphrase UUIDs. If you cannot find a category whose ID you can copy with full confidence, respond with `{"type":"skip"}` instead. A fabricated ID is treated as a wrong guess.
+5. ENRICHER NOTES — when the transaction's Description starts with `[enricher]` or `[enricher-refund]`, treat its structured fields as authoritative merchant evidence and prefer categorising over skipping. The format is one of:
+   * `[enricher] {vendor} → {merchant} — {kind} (Σ {total} €) ({date})` — vendor is a payment aggregator (e.g. PayPal); the real end-merchant is `{merchant}`. Categorise based on `{merchant}` + `{kind}`, NOT the aggregator name.
+   * `[enricher] {vendor} #{order_id} {items} (Σ {total} €) ({date})` — direct merchant order (e.g. Amazon). Categorise based on `{vendor}` + `{items}`.
+   * `[enricher-refund] …` — refund variant; same fields, but the transaction amount is positive (Income). Categorise to the same category the original purchase would have used.
+   The note was extracted from a confirmed order/payment email matched to this transaction by amount and date — its fields are authoritative. A `[enricher]` note rarely justifies a skip; only skip if no existing category plausibly covers `{merchant}`/`{vendor}`+`{items}`/`{kind}`.
+
+6. CRITICAL — categoryId integrity: when responding with `{"type":"existing", ...}` or `{"type":"rule", ...}`, the `categoryId` MUST be copied verbatim from the `(ID: "...")` annotations in the category list above. Do NOT invent, modify, or paraphrase UUIDs. If you cannot find a category whose ID you can copy with full confidence, respond with `{"type":"skip"}` instead. A fabricated ID is treated as a wrong guess.
 
 RESPONSE FORMAT: respond with ONLY a valid JSON object in one of these shapes:
 
