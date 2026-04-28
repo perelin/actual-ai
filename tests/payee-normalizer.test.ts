@@ -2,7 +2,7 @@ import normalizePayee from '../src/utils/payee-normalizer';
 
 describe('normalizePayee', () => {
   const cases: [string, string][] = [
-    ['Paypal Europe S.A.R.L. Et Cie S.C.A', 'paypal europe s.a.r.l. et cie s.c.a'],
+    ['Paypal Europe S.A.R.L. Et Cie S.C.A', 'paypal europe'],
     ['Klarna Bank Ab', 'klarna bank ab'],
     ['Klarna Bank Ab (Publ) (DE61 XXX 5519)', 'klarna bank ab (publ)'],
     ['Amazon Payments Europe S.C.A.', 'amazon payments europe s.c.a'],
@@ -28,6 +28,21 @@ describe('normalizePayee', () => {
     ['ÄÖÜäöü Test', 'äöüäöü test'],
     ['  SPAR  ', 'spar'],
     ['Test---Payee|||', 'test---payee'],
+    [
+      'Paypal Europe S.A.R.L. Et Cie S.C.A                                   22-24 Boulevard Royal, 2449 Luxembourg (LU89 XXX 200E)',
+      'paypal europe',
+    ],
+    [
+      'Paypal Europe S.A.R.L. Et Cie S.C.A                                   22-24 Boulevard Royal, 2449 Luxembourg',
+      'paypal europe',
+    ],
+    [
+      'Paypal (Europe) s.A R.L. Et Cie, S.C.A. (DE88 XXX 6303)',
+      'paypal europe',
+    ],
+    ['Müller GmbH, 69115 Heidelberg', 'müller gmbh, 69115 heidelberg'],
+    ['Müller GmbH, 80331 München', 'müller gmbh, 80331 münchen'],
+    ['Bäckerei Schmidt Hauptstr. 5, 10115 Berlin', 'bäckerei schmidt hauptstr. 5, 10115 berlin'],
   ];
 
   test.each(cases)('normalizes %j → %j', (input, expected) => {

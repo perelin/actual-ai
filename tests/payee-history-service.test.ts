@@ -36,7 +36,7 @@ const emptyBlocklist = new Set<string>();
 
 describe('PayeeHistoryService', () => {
   it('skips aggregator payees by blocklist', () => {
-    const blocklist = new Set(['paypal europe s.a.r.l. et cie s.c.a']);
+    const blocklist = new Set(['paypal europe']);
     const service = new PayeeHistoryService(
       [tx('1', 'Paypal Europe S.A.R.L. Et Cie S.C.A', 'cat-groceries')],
       categories,
