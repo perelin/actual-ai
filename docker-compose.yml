@@ -32,3 +32,13 @@ services:
     environment:
       #FEATURES: '["classifyOnStartup","freeWebSearch"]'
       FEATURES: '["classifyOnStartup", "fewShotPayeeHistory"]'
+
+  # Live + rerunMissedTransactions: re-evaluates every #actual-ai-miss tx so
+  # freshly written resolver/enricher notes get harvested (P2L-209 Monatslauf).
+  # Own service instead of a live default because each run pays LLM calls for
+  # ALL open misses — only worth it right after new notes were written.
+  actual-ai-live-rerun:
+    <<: *actual-ai-base
+    container_name: actual-ai-live-rerun
+    environment:
+      FEATURES: '["classifyOnStartup", "fewShotPayeeHistory", "rerunMissedTransactions"]'
