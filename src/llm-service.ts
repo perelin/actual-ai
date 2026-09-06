@@ -169,6 +169,13 @@ export default class LlmService implements LlmServiceI {
     const base = {
       model: this.model,
       temperature: 0.2,
+      // 2026-09 GLM switch: reasoning is mandatory via OpenRouter's Anthropic
+      // skin and burns output tokens before the JSON text block. Without an
+      // explicit budget the AI SDK defaults to 4096 — GLM 5.3 thinking on
+      // few-shot-heavy transactions hit that ceiling with an EMPTY text block
+      // (observed in dry-n 100). 16384 leaves ample thinking headroom; only
+      // used tokens are billed.
+      maxTokens: 16384,
       tools: tools as Parameters<typeof generateText>[0]['tools'],
       maxSteps: tools ? 3 : 1,
       abortSignal,
@@ -235,6 +242,8 @@ export default class LlmService implements LlmServiceI {
             model: this.model,
             prompt,
             temperature: 0.1,
+            // Same GLM reasoning headroom as buildGenerateArgs (see there).
+            maxTokens: 16384,
             abortSignal: controller.signal,
           });
 
