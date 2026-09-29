@@ -16,15 +16,16 @@ services:
       #FEATURES: '["classifyOnStartup","freeWebSearch","dryRun"]'
       FEATURES: '["classifyOnStartup", "dryRun", "fewShotPayeeHistory"]'
 
-  # Same as actual-ai-dry, but with claude-haiku-4-5 instead of the default
-  # ANTHROPIC_MODEL from .env. Used for A/B-comparing Haiku vs Sonnet
-  # categorization quality on the same uncategorized tx set.
-  actual-ai-dry-haiku:
+  # Same as actual-ai-dry, but with the previous default model instead of the
+  # ANTHROPIC_MODEL from .env. Used for A/B-comparing glm-5.3 vs the current
+  # flash default on the same uncategorized tx set (2026-09-29: the Claude
+  # haiku comparator this replaced is gone — everything runs GLM now).
+  actual-ai-dry-glm:
     <<: *actual-ai-base
-    container_name: actual-ai-dry-haiku
+    container_name: actual-ai-dry-glm
     environment:
       FEATURES: '["classifyOnStartup", "dryRun", "fewShotPayeeHistory"]'
-      ANTHROPIC_MODEL: claude-haiku-4-5
+      ANTHROPIC_MODEL: z-ai/glm-5.3
 
   actual-ai-live:
     <<: *actual-ai-base
