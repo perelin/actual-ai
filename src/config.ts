@@ -188,6 +188,12 @@ export const fewShotAggregatorBlocklistRaw = [
   'Amazon Eu S.A R.L., Niederlassung Deutschland',
   'Apple.Com/Bill',
   'Nexi Germany Gmbh (DE09 XXX 5340)',
+  // Card acquirers / payment processors: the bank line names the processor,
+  // never the merchant.
+  'Landesbank Hessen-Thuringen',
+  'Adyen N.V.',
+  'Payone Gmbh',
+  'Amazon Digital Germany Gmbh',
 ];
 
 // All PayPal Europe imported_payee variants (with/without IBAN suffix, address
