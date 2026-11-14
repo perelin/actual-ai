@@ -27,6 +27,8 @@ class TransactionService implements TransactionServiceI {
 
   private readonly maxTransactions: number | undefined;
 
+  private readonly transactionIds: Set<string> | undefined;
+
   constructor(
     actualApiClient: ActualApiServiceI,
     categorySuggester: CategorySuggester,
@@ -34,6 +36,7 @@ class TransactionService implements TransactionServiceI {
     transactionFilterer: TransactionFilterer,
     isDryRun: boolean,
     maxTransactions?: number,
+    transactionIds?: Set<string>,
   ) {
     this.actualApiService = actualApiClient;
     this.categorySuggester = categorySuggester;
@@ -41,6 +44,7 @@ class TransactionService implements TransactionServiceI {
     this.transactionFilterer = transactionFilterer;
     this.isDryRun = isDryRun;
     this.maxTransactions = maxTransactions;
+    this.transactionIds = transactionIds;
   }
 
   async processTransactions(): Promise<void> {
@@ -73,7 +77,9 @@ class TransactionService implements TransactionServiceI {
       return;
     }
 
-    const transactionsToProcess = this.applyMaxTransactionsLimit(uncategorizedTransactions);
+    const transactionsToProcess = this.applyMaxTransactionsLimit(
+      this.applyTransactionIdFilter(uncategorizedTransactions),
+    );
 
     let payeeHistoryService: PayeeHistoryService | null = null;
     if (usePayeeHistory) {
@@ -115,6 +121,20 @@ class TransactionService implements TransactionServiceI {
         categoryGroups,
       );
     }
+  }
+
+  private applyTransactionIdFilter(
+    uncategorized: TransactionEntity[],
+  ): TransactionEntity[] {
+    const ids = this.transactionIds;
+    if (ids === undefined) {
+      return uncategorized;
+    }
+    const selected = uncategorized.filter((tx) => ids.has(tx.id));
+    console.log(
+      `TRANSACTION_IDS: ${selected.length} of ${ids.size} requested ids are uncategorized and pass the filters`,
+    );
+    return selected;
   }
 
   private applyMaxTransactionsLimit(

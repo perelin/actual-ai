@@ -23,6 +23,7 @@ import {
   llmTimeoutMs,
   maxTransactions,
   notGuessedTag,
+  transactionIds,
   ollamaBaseURL,
   ollamaModel,
   openaiApiKey,
@@ -157,6 +158,7 @@ const transactionService = new TransactionService(
   transactionFilterer,
   isDryRun,
   maxTransactions,
+  transactionIds,
 );
 
 const notesMigrator = new NotesMigrator(

@@ -79,4 +79,13 @@ describe('config feature env parsing', () => {
       expect(config.maxTransactions).toBe(7);
     });
   });
+
+  describe('TRANSACTION_IDS', () => {
+    test('parses comma- and whitespace-separated ids, unset or blank means no filter', async () => {
+      const { parseTransactionIds } = await import('../src/config');
+      expect(parseTransactionIds(undefined)).toBeUndefined();
+      expect(parseTransactionIds('  ')).toBeUndefined();
+      expect(parseTransactionIds('a, b\nc,,d')).toEqual(new Set(['a', 'b', 'c', 'd']));
+    });
+  });
 });
