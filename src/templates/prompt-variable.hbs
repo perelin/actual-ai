@@ -14,8 +14,13 @@ Transaction details:
 {{/if}}
 {{#if payeeHistory}}
 {{#if (eq payeeHistory.matchType "aggregator-skip")}}
+{{#if hasMerchantNote}}
+
+Note: this payee is a payment aggregator or card acquirer (PayPal/Klarna/Sumup/Amazon Payments/Apple-Bill style). The real merchant is named in the enrichment line of the Description — categorize by that merchant, not by the payee name.
+{{else}}
 
 Note: this payee is a known payment aggregator (PayPal/Klarna/Sumup/Amazon Payments/Apple-Bill style). The real merchant is hidden behind the payee name. If the description, notes, or amount do not clearly identify the actual merchant or category, respond with {"type": "skip"} — do not guess.
+{{/if}}
 {{else}}
 
 Past classifications for this payee (normalized: "{{payeeHistory.normalizedKey}}", match: {{payeeHistory.matchType}}):

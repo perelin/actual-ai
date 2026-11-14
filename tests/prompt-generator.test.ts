@@ -1,6 +1,6 @@
 import { TransactionEntity, RuleEntity } from '@actual-app/core/src/types/models';
 import fs from 'fs';
-import PromptGenerator from '../src/prompt-generator';
+import PromptGenerator, { cleanNotesForPrompt, hasMerchantNote } from '../src/prompt-generator';
 import GivenActualData from './test-doubles/given/given-actual-data';
 import PromptTemplateException from '../src/exceptions/prompt-template-exception';
 import * as config from '../src/config';
@@ -371,10 +371,54 @@ describe('PromptGenerator', () => {
       // the LLM sees the note but does not consistently use it as merchant
       // evidence (P2L-93: 107 Amazon-EU Tx with [enricher]-notes still missed).
       expect(split.staticPart).toContain('[enricher]');
-      expect(split.staticPart).toContain('authoritative');
+      expect(split.staticPart).toContain('[enrich:<sources>]');
       // Refund variant must also be acknowledged so the LLM treats negative-
       // amount Tx with refund prefix correctly.
       expect(split.staticPart).toContain('[enricher-refund]');
+    });
+  });
+
+  describe('merchant notes (ACTUAL-62)', () => {
+    const aggregatorView = {
+      normalizedKey: 'paypal europe',
+      matchType: 'aggregator-skip' as const,
+      histogramLine: '',
+      entries: [],
+      histogram: new Map<string, number>(),
+    };
+
+    const generateFor = (notes: string) => newGenerator().generate(
+      GivenActualData.createSampleCategoryGroups(),
+      GivenActualData.createTransaction('tx-pp', -5000, 'PayPal Europe S.a.r.l.', notes, undefined, undefined, '2026-09-09'),
+      GivenActualData.createSamplePayees(),
+      [],
+      aggregatorView,
+    );
+
+    it('drops the "do not guess" aggregator hint when an [enrich:…] line names the merchant', () => {
+      const split = generateFor('Ihr Einkauf bei Fa. Hermann Edzards\n[enrich:gocardless] Fa. Hermann Edzards (Σ -50.00 EUR) #actual-ai-miss');
+
+      expect(split.variablePart).toContain('categorize by that merchant');
+      expect(split.variablePart).not.toContain('do not guess');
+    });
+
+    it('keeps the "do not guess" aggregator hint for a bare aggregator row', () => {
+      const split = generateFor('303-9228802-8598711 AMZN Mktp DE #actual-ai-miss');
+
+      expect(split.variablePart).toContain('do not guess');
+    });
+
+    it('detects [enrich:…], [enricher] and [enricher-refund] lines anywhere in the notes', () => {
+      expect(hasMerchantNote('purpose\n[enrich:email-receipt] DHL (Σ 6.19 EUR)')).toBe(true);
+      expect(hasMerchantNote('[enricher] PayPal → Thalia (Σ 9,99 €) (2026-01-01)')).toBe(true);
+      expect(hasMerchantNote('x\n[enricher-refund] Amazon #1 (Σ 1,00 €) (2026-01-01)')).toBe(true);
+      expect(hasMerchantNote('Ihr Einkauf bei Thalia #actual-ai-miss')).toBe(false);
+    });
+
+    it('strips categorizer tags and stray "-miss" residue from the prompt copy of the notes', () => {
+      const notes = '2026-03-26T17:16 Debitk.14 2026-12-miss\n#actual-ai-miss\n[enrich:gocardless] HUGENDUBEL (Σ -9.99 EUR) #actual-ai-miss';
+
+      expect(cleanNotesForPrompt(notes)).toBe('2026-03-26T17:16 Debitk.14 2026-12\n[enrich:gocardless] HUGENDUBEL (Σ -9.99 EUR)');
     });
   });
 });

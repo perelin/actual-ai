@@ -23,18 +23,21 @@ CATEGORIZATION RULES (IMPORTANT, in order):
 
 1. Prefer abstention over a wrong guess. Respond with {"type": "skip"} when no existing category clearly fits. Skipped transactions stay uncategorized for manual review.
 
-2. Use the per-category description, examples ("Beispiele:") and disambiguation ("Hinweis:") above as your primary guide. A weak or speculative association is NOT enough — skip instead.
+2. Use the per-category description, examples ("Beispiele:") and disambiguation ("Hinweis:") above as your primary guide. A weak or speculative association is NOT enough — skip instead. Knowing what a merchant sells (a bookshop, a post office, a restaurant, a parcel service) is a clear association, not a speculative one.
 
 3. Self-transfers (a payee that is the user's own name with an IBAN in parentheses) are typically savings transfers — see the description of the "Savings" category. Classify them; do NOT skip them just because the payee is a personal name.
 
 4. Do not suggest new categories unless the transaction clearly belongs to a domain that no existing category covers.
 
-5. ENRICHER NOTES — when the transaction's Description starts with `[enricher]` or `[enricher-refund]`, treat its structured fields as authoritative merchant evidence and prefer categorising over skipping. The note is one of:
-   * `[enricher] {vendor} → {merchant} — {kind} (Σ {total} €) ({date})` — vendor is a payment aggregator (e.g. PayPal); the real end-merchant is `{merchant}`. Categorise based on `{merchant}` + `{kind}`, NOT the aggregator name.
-   * `[enricher] {vendor} #{order_id} — {items} (Σ {total} €) ({date})` — direct merchant order with itemized list (e.g. Amazon). Categorise based on `{vendor}` + `{items}`.
-   * `[enricher] {vendor} #{order_id} (Σ {total} €) ({date})` — same direct-merchant order, but the items field is missing (sparse extraction). Categorise based on `{vendor}` + the order context alone.
-   * `[enricher-refund] …` — refund variant; same fields, but the transaction amount is positive (Income). Categorise to the same category the original purchase would have used.
-   `{items}` may end with `+N weitere` when more items were truncated. The note was extracted from a confirmed order/payment email matched to this transaction by amount and date — its fields are authoritative. A `[enricher]` note rarely justifies a skip; only skip if no existing category plausibly covers `{merchant}`/`{vendor}`+`{items}`/`{kind}`.
+5. MERCHANT NOTES — the Description may contain lines written by enrichment tools. Each such line starts with a tag and names the merchant behind the payment:
+   * `[enrich:<sources>] <merchant> — <items> (Σ <total> <currency>) #<order>` — `<sources>` says where the merchant came from: `gocardless` = the bank's own payment data (reliable), `amazon` = the matching Amazon order, `email-receipt` = a receipt email matched by amount and date. Items and order number are optional.
+   * `[enricher] {vendor} → {merchant} (Σ {total} €) ({date})` — vendor is a payment aggregator (e.g. PayPal); the real merchant is `{merchant}`.
+   * `[enricher] {vendor} #{order_id} — {items} (Σ {total} €) ({date})` — direct merchant order with an item list (e.g. Amazon); items may be missing or end with `+N weitere`.
+   * `[enricher-refund] …` — refund variant; the amount is positive (Income). Use the category the original purchase would have used.
+   When such a line names a merchant, categorise by that merchant and its items — NOT by the payee name, which is often only a payment aggregator or card acquirer (PayPal, Klarna, Amazon Payments, Adyen, Landesbank Hessen-Thüringen). Skip only when:
+   * no existing category plausibly covers the merchant/items, or
+   * the line only repeats an aggregator name (e.g. "AMAZON EU S.A R.L." without items), or
+   * an `email-receipt` line names a merchant that clearly contradicts a specific shop in the payee field — receipt matching is fuzzy, so the bank's payee and `gocardless` data win over `email-receipt` in a conflict.
 
 6. CRITICAL — categoryId integrity: when responding with `{"type":"existing", ...}` or `{"type":"rule", ...}`, the `categoryId` MUST be copied verbatim from the `(ID: "...")` annotations in the category list above. Do NOT invent, modify, or paraphrase UUIDs. If you cannot find a category whose ID you can copy with full confidence, respond with `{"type":"skip"}` instead. A fabricated ID is treated as a wrong guess.
 

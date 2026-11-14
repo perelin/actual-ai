@@ -11,6 +11,26 @@ import { isToolEnabled, fewShotHistogramTopN } from './config';
 import { transformRulesToDescriptions } from './utils/rule-utils';
 import { augmentCategoryGroups } from './category-augmentation';
 
+const ENRICHMENT_LINE = /^\s*\[(enrich:[^\]]+|enricher|enricher-refund)\]/m;
+
+// The categorizer's own bookkeeping tags carry no merchant signal, and on a
+// rerun "#actual-ai-miss" tells the model "you skipped this before" — a nudge
+// to skip again. Older runs also left a stray "-miss" glued to line ends.
+export function cleanNotesForPrompt(notes: string): string {
+  return notes
+    .split('\n')
+    .map((line) => line
+      .replace(/\s*#actual-ai(-miss)?\b/g, '')
+      .replace(/(-miss)+$/, '')
+      .trimEnd())
+    .filter((line) => line.trim() !== '')
+    .join('\n');
+}
+
+export function hasMerchantNote(notes: string): boolean {
+  return ENRICHMENT_LINE.test(notes);
+}
+
 class PromptGenerator implements PromptGeneratorI {
   private readonly staticTemplate: string;
 
@@ -91,7 +111,8 @@ class PromptGenerator implements PromptGeneratorI {
       const variableContext = {
         amount: Math.abs(transaction.amount),
         type: transaction.amount > 0 ? 'Income' : 'Outcome',
-        description: transaction.notes ?? '',
+        description: cleanNotesForPrompt(transaction.notes ?? ''),
+        hasMerchantNote: hasMerchantNote(transaction.notes ?? ''),
         payee: payeeName ?? '',
         importedPayee: transaction.imported_payee ?? '',
         date: transaction.date ?? '',
