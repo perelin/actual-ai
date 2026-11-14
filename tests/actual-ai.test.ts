@@ -533,7 +533,10 @@ describe('ActualAiService', () => {
   });
 
   describe('max transactions limit', () => {
-    function buildServiceWithLimit(limit: number | undefined): TransactionService {
+    function buildServiceWithLimit(
+      limit: number | undefined,
+      transactionIds?: Set<string>,
+    ): TransactionService {
       const tagService = new TagService(NOT_GUESSED_TAG, GUESSED_TAG);
       const ruleMatchStrategy = new RuleMatchStrategy(inMemoryApiService, tagService);
       const existingCategoryStrategy = new ExistingCategoryStrategy(
@@ -560,8 +563,34 @@ describe('ActualAiService', () => {
         new TransactionFilterer(tagService),
         false,
         limit,
+        transactionIds,
       );
     }
+
+    it('processes only the requested ids when TRANSACTION_IDS is set, before the newest-N limit', async () => {
+      const t1 = GivenActualData.createTransaction('1', -10, 'Old', '', undefined, undefined, '2024-01-01');
+      const t2 = GivenActualData.createTransaction('2', -20, 'Mid', '', undefined, undefined, '2024-02-01');
+      const t3 = GivenActualData.createTransaction('3', -30, 'Newest', '', undefined, undefined, '2024-03-01');
+      inMemoryApiService.setTransactions([t1, t2, t3]);
+      mockedLlmService.setGuess(GivenActualData.CATEGORY_GROCERIES);
+
+      // Limit 1 applied after the id filter keeps the newest *requested* row (2),
+      // not the newest overall (3).
+      const filtered = buildServiceWithLimit(1, new Set(['1', '2', 'unknown']));
+      sut = new ActualAiService(
+        filtered,
+        inMemoryApiService,
+        new NotesMigrator(inMemoryApiService, new TagService(NOT_GUESSED_TAG, GUESSED_TAG)),
+      );
+
+      await sut.classify();
+
+      const updated = await inMemoryApiService.getTransactions();
+      const byId = (id: string) => updated.find((t) => t.id === id)!;
+      expect(byId('2').category).toBe(GivenActualData.CATEGORY_GROCERIES);
+      expect(byId('1').category).toBeUndefined();
+      expect(byId('3').category).toBeUndefined();
+    });
 
     it('processes only the newest N transactions when MAX_TRANSACTIONS is set', async () => {
       // Arrange: 4 uncategorized transactions, dates spread over 4 months.

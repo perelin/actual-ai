@@ -100,6 +100,10 @@ class TransactionProcessor {
 
       const validCategoryIds = new Set(categories.map((c) => c.id));
       const response = await this.llmService.ask(splitPrompt, validCategoryIds);
+      console.log(
+        `[verdict] tx=${transaction.id} type=${response.type}`
+        + `${response.categoryId ? ` category=${response.categoryId}` : ''}`,
+      );
 
       const strategy = this.processingStrategies.find((s) => s.isSatisfiedBy(response));
       if (strategy) {

@@ -43,6 +43,16 @@ export function parseMaxTransactions(raw: string | undefined): number | undefine
 export const maxTransactions: number | undefined = parseMaxTransactions(
   process.env.MAX_TRANSACTIONS,
 );
+// Restricts a run to an explicit set of transaction IDs (comma/whitespace
+// separated) so prompt/model A/B runs hit the exact same rows.
+export function parseTransactionIds(raw: string | undefined): Set<string> | undefined {
+  if (raw === undefined || raw.trim() === '') return undefined;
+  return new Set(raw.split(/[\s,]+/).filter((id) => id !== ''));
+}
+
+export const transactionIds: Set<string> | undefined = parseTransactionIds(
+  process.env.TRANSACTION_IDS,
+);
 export const openrouterEnableToolCalling = process.env.OPENROUTER_ENABLE_TOOL_CALLING === 'true';
 export const anthropicApiKey = process.env.ANTHROPIC_API_KEY ?? '';
 export const anthropicBaseURL = process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com/v1';
